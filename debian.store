@@ -1,1 +1,1 @@
-{"base": "4c75645", "parent": "debian/rolling/mrpt_sensor_bumblebee_stereo", "previous": "c15c52a", "trim": "", "trimbase": ""}
+{"base": "ed28cb3", "parent": "debian/jazzy/mrpt_sensor_bumblebee_stereo", "previous": "ab0d1e0", "trim": "", "trimbase": ""}

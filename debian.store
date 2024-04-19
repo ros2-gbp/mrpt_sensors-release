@@ -1,1 +1,1 @@
-{"base": "31bb6b4", "parent": "debian/rolling/mrpt_sensor_gnns_nmea", "previous": "e3599b5", "trim": "", "trimbase": ""}
+{"base": "376fd67", "parent": "debian/jazzy/mrpt_sensor_gnns_nmea", "previous": "ec773c9", "trim": "", "trimbase": ""}

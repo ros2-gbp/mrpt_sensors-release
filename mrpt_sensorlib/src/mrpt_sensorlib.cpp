@@ -11,12 +11,14 @@
 #include <mrpt/config/CConfigFile.h>
 #include <mrpt/config/CConfigFileMemory.h>
 #include <mrpt/obs/CObservationGPS.h>
+#include <mrpt/obs/CObservationIMU.h>
 #include <mrpt/serialization/CArchive.h>
 #include <mrpt/system/filesystem.h>
 
 // MRPT -> ROS bridge:
 #include <mrpt/ros2bridge/gps.h>
 #include <mrpt/ros2bridge/image.h>
+#include <mrpt/ros2bridge/imu.h>
 #include <mrpt/ros2bridge/point_cloud2.h>
 #include <mrpt/ros2bridge/pose.h>
 #include <mrpt/ros2bridge/time.h>
@@ -140,6 +142,13 @@ void GenericSensorNode::init(
         publish_sensor_pose_tf_ =
             this->get_parameter("publish_sensor_pose_tf").as_bool();
 
+        this->declare_parameter(
+            "publish_sensor_pose_tf_minimum_period",
+            publish_sensor_pose_tf_minimum_period_);
+        publish_sensor_pose_tf_minimum_period_ =
+            this->get_parameter("publish_sensor_pose_tf_minimum_period")
+                .as_double();
+
         // ----------------- End of common ROS 2 params -----------------
 
         // Call sensor factory:
@@ -171,19 +180,22 @@ void GenericSensorNode::init(
             mrpt::system::TTimeParts parts;
             mrpt::system::timestampToParts(mrpt::Clock::now(), parts, true);
             rawlog_postfix += mrpt::format(
-                "%04u-%02u-%02u_%02uh%02um%02us", (unsigned int)parts.year,
-                (unsigned int)parts.month, (unsigned int)parts.day,
-                (unsigned int)parts.hour, (unsigned int)parts.minute,
-                (unsigned int)parts.second);
+                "%04u-%02u-%02u_%02uh%02um%02us.rawlog",
+                (unsigned int)parts.year, (unsigned int)parts.month,
+                (unsigned int)parts.day, (unsigned int)parts.hour,
+                (unsigned int)parts.minute, (unsigned int)parts.second);
 
             rawlog_postfix =
                 mrpt::system::fileNameStripInvalidChars(rawlog_postfix);
 
             const std::string fil = out_rawlog_prefix_ + rawlog_postfix;
-            // auto out_arch = archiveFrom(out_rawlog_);
+
             RCLCPP_INFO(
                 this->get_logger(), "Writing rawlog to file: `%s`",
                 fil.c_str());
+
+            out_rawlog_.emplace(fil);
+            ASSERT_(out_rawlog_->is_open());
         }
     }
     catch (const std::exception& e)
@@ -255,12 +267,18 @@ void GenericSensorNode::process_observation(
     }
 
     // Publish tf?
-    if (publish_sensor_pose_tf_)
+    const double tNow = mrpt::Clock::nowDouble();
+
+    if (publish_sensor_pose_tf_ && robot_frame_id_ != sensor_frame_id_ &&
+        tNow - stamp_last_tf_publish_ >= publish_sensor_pose_tf_minimum_period_)
     {
+        ASSERT_(!robot_frame_id_.empty());
+        ASSERT_(!sensor_frame_id_.empty());
+
         geometry_msgs::msg::TransformStamped tf;
         tf.header.stamp = get_clock()->now();
-        tf.header.frame_id = this->robot_frame_id_;
-        tf.child_frame_id = this->sensor_frame_id_;
+        tf.header.frame_id = robot_frame_id_;
+        tf.child_frame_id = sensor_frame_id_;
 
         // Set translation
         tf.transform =
@@ -268,6 +286,15 @@ void GenericSensorNode::process_observation(
 
         // Publish the transform
         tf_bc_->sendTransform(tf);
+
+        stamp_last_tf_publish_ = tNow;
+    }
+
+    // Save to .rawlog?
+    if (out_rawlog_.has_value())
+    {
+        auto out_arch = mrpt::serialization::archiveFrom(*out_rawlog_);
+        out_arch << *o;
     }
 
     // custom handling?
@@ -282,6 +309,12 @@ void GenericSensorNode::process_observation(
         oGPS)
     {
         process(*oGPS);
+    }
+    else if (auto oIMU =
+                 std::dynamic_pointer_cast<mrpt::obs::CObservationIMU>(o);
+             oIMU)
+    {
+        process(*oIMU);
     }
 }
 
@@ -311,6 +344,19 @@ void GenericSensorNode::process(const mrpt::obs::CObservationGPS& o)
     if (!valid) return;
 
     gps_publisher_->publish(msg);
+}
+
+void GenericSensorNode::process(const mrpt::obs::CObservationIMU& o)
+{
+    ensure_publisher_exists<sensor_msgs::msg::Imu>(imu_publisher_);
+
+    auto header = create_header(o);
+
+    auto msg = sensor_msgs::msg::Imu();
+    bool valid = mrpt::ros2bridge::toROS(o, header, msg);
+    if (!valid) return;
+
+    imu_publisher_->publish(msg);
 }
 
 }  // namespace mrpt_sensors

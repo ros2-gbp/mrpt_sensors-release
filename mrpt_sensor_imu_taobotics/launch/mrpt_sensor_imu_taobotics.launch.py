@@ -10,7 +10,7 @@ import os
 
 
 def generate_launch_description():
-    namespace = 'bumblebee_stereo'
+    namespace = 'taobotics'
 
     ld = LaunchDescription([
         # COMMON PARAMS TO ALL MRPT_SENSOR NODES:
@@ -18,7 +18,7 @@ def generate_launch_description():
         # Declare an argument for the config file
         DeclareLaunchArgument(
             'process_rate',
-            default_value='"80"',
+            default_value='"500"',
             description='Rate (Hz) for the process() main sensor loop.'
         ),
 
@@ -37,12 +37,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'publish_topic',
             default_value='sensor',
-            description='If not empty, messages of type sensor_msg/Image will be published to this topic (plus suffix "_left"/"_right") for each sensor observation.'
+            description='If not empty, messages of type sensor_msg/Imu will be published to this topic for each sensor observation.'
         ),
 
         DeclareLaunchArgument(
             'sensor_frame_id',
-            default_value='sensor',
+            default_value='imu',
             description='The sensor frame_id name. Used to populate msg header and to publish to /tf too.'
         ),
 
@@ -59,23 +59,15 @@ def generate_launch_description():
 
         # PARAMS FOR THIS NODE:
         # --------------------------------------------
-
         DeclareLaunchArgument(
-            'dc1394_framerate',
-            default_value='"15"',
-            description='eg: 7.5, 15, 30, 60, etc... For possibilities see mrpt::hwdrivers::TCaptureOptions_dc1394'
+            'serial_port',
+            description='Serial port device to open, e.g. /dev/ttyUSB0'
         ),
 
         DeclareLaunchArgument(
-            'dc1394_camera_guid',
-            default_value='"0"',
-            description='0 (or not present): the first camera. A hexadecimal number (0x11223344): The GUID of the camera to open'
-        ),
-
-        DeclareLaunchArgument(
-            'camera_preview_decimation',
-            default_value='"0"',
-            description='N<=0 (or not present): No preview; N>0, display 1 out of N captured frames.'
+            'sensor_model',
+            default_value='"hfi-a9"',
+            description='Sensor model, needed to parse its binary frame protocol. Supported devices (check mrpt::hwdrivers::CTaoboticsIMU) at present are: (hfi-b6|hfi-a9)'
         ),
 
         DeclareLaunchArgument(
@@ -117,9 +109,9 @@ def generate_launch_description():
 
         # Node to launch the mrpt_generic_sensor_node
         Node(
-            package='mrpt_sensor_bumblebee_stereo',
-            executable='mrpt_sensor_bumblebee_stereo_node',
-            name='mrpt_sensor_bumblebee_stereo',
+            package='mrpt_sensor_imu_taobotics',
+            executable='mrpt_sensor_imu_taobotics_node',
+            name='mrpt_sensor_imu_taobotics',
             output='screen',
             arguments=['--ros-args', '--log-level',
                        LaunchConfiguration('log_level')],
@@ -140,11 +132,8 @@ def generate_launch_description():
                 # ------------------------------------------------
                 # node params:
                 # ------------------------------------------------
-                {'dc1394_framerate': LaunchConfiguration('dc1394_framerate')},
-                {'dc1394_camera_guid': LaunchConfiguration(
-                    'dc1394_camera_guid')},
-                {'camera_preview_decimation': LaunchConfiguration(
-                    'camera_preview_decimation')},
+                {'serial_port': LaunchConfiguration('serial_port')},
+                {'sensor_model': LaunchConfiguration('sensor_model')},
 
                 {'sensor_pose_x': LaunchConfiguration('sensor_pose_x')},
                 {'sensor_pose_y': LaunchConfiguration('sensor_pose_y')},

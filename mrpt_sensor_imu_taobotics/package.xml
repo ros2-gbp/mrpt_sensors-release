@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>mrpt_sensor_bumblebee_stereo</name>
+  <name>mrpt_sensor_imu_taobotics</name>
   <version>0.2.0</version>
-  <description>ROS node for Bumblebee Stereo Cameras using libdc1394 interface (based on mrpt-hwdrivers)</description>
+  <description>ROS node for Taobotics USB IMUs (based on mrpt-hwdrivers)</description>
 
   <url type="website">https://github.com/mrpt-ros-pkg/mrpt_sensors</url>
   <maintainer email="joseluisblancoc@gmail.com">José Luis Blanco-Claraco</maintainer>

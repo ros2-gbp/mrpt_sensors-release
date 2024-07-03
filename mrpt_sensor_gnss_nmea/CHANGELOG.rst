@@ -1,6 +1,11 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Changelog for package mrpt_sensor_gnns_nmea
+Changelog for package mrpt_sensor_gnss_nmea
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+0.2.1 (2024-07-03)
+------------------
+* Fix typo in GNSS names
+* Contributors: Jose Luis Blanco-Claraco
 
 0.2.0 (2024-05-20)
 ------------------
@@ -13,5 +18,5 @@ Changelog for package mrpt_sensor_gnns_nmea
 * Reformat with clang-format to fix ament_linters
 * more conservative uncertainty
 * fix covariance term index
-* create gnns node
+* create gnss node
 * Contributors: Jose Luis Blanco-Claraco

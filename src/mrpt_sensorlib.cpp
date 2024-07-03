@@ -11,12 +11,14 @@
 #include <mrpt/config/CConfigFile.h>
 #include <mrpt/config/CConfigFileMemory.h>
 #include <mrpt/obs/CObservationGPS.h>
+#include <mrpt/obs/CObservationIMU.h>
 #include <mrpt/serialization/CArchive.h>
 #include <mrpt/system/filesystem.h>
 
 // MRPT -> ROS bridge:
 #include <mrpt/ros2bridge/gps.h>
 #include <mrpt/ros2bridge/image.h>
+#include <mrpt/ros2bridge/imu.h>
 #include <mrpt/ros2bridge/point_cloud2.h>
 #include <mrpt/ros2bridge/pose.h>
 #include <mrpt/ros2bridge/time.h>
@@ -47,7 +49,7 @@ void GenericSensorNode::init()
         cfg_section = this->get_parameter("config_section").as_string();
 
         mrpt::config::CConfigFile iniFile(cfgfilename);
-        init(iniFile, cfg_section);
+        init(iniFile, {cfg_section});
     }
     catch (const std::exception& e)
     {
@@ -75,7 +77,7 @@ void text_replace(
 
 void GenericSensorNode::init(
     const char* templateText, const std::vector<TemplateParameter>& rosParams,
-    const std::string& section)
+    const std::vector<std::string>& sections)
 {
     using namespace std::string_literals;
 
@@ -108,11 +110,12 @@ void GenericSensorNode::init(
                                 << text);
 
     mrpt::config::CConfigFileMemory cfg(text);
-    init(cfg, section);
+    init(cfg, sections);
 }
 
 void GenericSensorNode::init(
-    const mrpt::config::CConfigFileBase& config, const std::string& section)
+    const mrpt::config::CConfigFileBase& config,
+    const std::vector<std::string>& sections)
 {
     try
     {
@@ -140,28 +143,42 @@ void GenericSensorNode::init(
         publish_sensor_pose_tf_ =
             this->get_parameter("publish_sensor_pose_tf").as_bool();
 
+        this->declare_parameter(
+            "publish_sensor_pose_tf_minimum_period",
+            publish_sensor_pose_tf_minimum_period_);
+        publish_sensor_pose_tf_minimum_period_ =
+            this->get_parameter("publish_sensor_pose_tf_minimum_period")
+                .as_double();
+
         // ----------------- End of common ROS 2 params -----------------
 
-        // Call sensor factory:
-        std::string driver_name =
-            config.read_string(section, "driver", "", true);
-        sensor_ = mrpt::hwdrivers::CGenericSensor::createSensorPtr(driver_name);
-        if (!sensor_)
+        // For each defined sensor:
+        for (const auto& section : sections)
         {
-            RCLCPP_ERROR_STREAM(
-                this->get_logger(),
-                "Sensor class name not recognized: " << driver_name);
-            return;
+            // Call sensor factory:
+            std::string driver_name =
+                config.read_string(section, "driver", "", true);
+            auto sensor =
+                mrpt::hwdrivers::CGenericSensor::createSensorPtr(driver_name);
+            if (!sensor)
+            {
+                RCLCPP_ERROR_STREAM(
+                    this->get_logger(),
+                    "Sensor class name not recognized: " << driver_name);
+                return;
+            }
+
+            sensors_.push_back(sensor);
+
+            // Load common & sensor-specific parameters:
+            sensor->loadConfig(config, section);
+
+            // Initialize sensor:
+            sensor->initialize();
+
+            // Custom init:
+            if (init_sensor_specific) init_sensor_specific();
         }
-
-        // Load common & sensor-specific parameters:
-        sensor_->loadConfig(config, section);
-
-        // Initialize sensor:
-        sensor_->initialize();
-
-        // Custom init:
-        if (init_sensor_specific) init_sensor_specific();
 
         // Open rawlog file, if enabled:
         if (!out_rawlog_prefix_.empty())
@@ -171,19 +188,22 @@ void GenericSensorNode::init(
             mrpt::system::TTimeParts parts;
             mrpt::system::timestampToParts(mrpt::Clock::now(), parts, true);
             rawlog_postfix += mrpt::format(
-                "%04u-%02u-%02u_%02uh%02um%02us", (unsigned int)parts.year,
-                (unsigned int)parts.month, (unsigned int)parts.day,
-                (unsigned int)parts.hour, (unsigned int)parts.minute,
-                (unsigned int)parts.second);
+                "%04u-%02u-%02u_%02uh%02um%02us.rawlog",
+                (unsigned int)parts.year, (unsigned int)parts.month,
+                (unsigned int)parts.day, (unsigned int)parts.hour,
+                (unsigned int)parts.minute, (unsigned int)parts.second);
 
             rawlog_postfix =
                 mrpt::system::fileNameStripInvalidChars(rawlog_postfix);
 
             const std::string fil = out_rawlog_prefix_ + rawlog_postfix;
-            // auto out_arch = archiveFrom(out_rawlog_);
+
             RCLCPP_INFO(
                 this->get_logger(), "Writing rawlog to file: `%s`",
                 fil.c_str());
+
+            out_rawlog_.emplace(fil);
+            ASSERT_(out_rawlog_->is_open());
         }
     }
     catch (const std::exception& e)
@@ -197,30 +217,34 @@ void GenericSensorNode::init(
 
 void GenericSensorNode::run()
 {
-    RCLCPP_INFO(
-        this->get_logger(), "Starting run() at %.02f Hz",
-        sensor_->getProcessRate());
-    if (!sensor_)
+    if (sensors_.empty() || !sensors_.at(0))
     {
         RCLCPP_ERROR(
             this->get_logger(),
             "Aborting: sensor object was not properly initialized.");
         return;
     }
-    rclcpp::Rate loop_rate(sensor_->getProcessRate());
+    const double rate = sensors_.at(0)->getProcessRate();
+    RCLCPP_INFO(this->get_logger(), "Starting run() at %.02f Hz", rate);
+
+    rclcpp::Rate loop_rate(rate);
     while (rclcpp::ok())
     {
-        sensor_->doProcess();
-
-        // Get new observations
-        const mrpt::hwdrivers::CGenericSensor::TListObservations lstObjs =
-            sensor_->getObservations();
-
-        for (const auto& [t, obj] : lstObjs)
+        for (auto& sensor : sensors_)
         {
-            auto obs = std::dynamic_pointer_cast<mrpt::obs::CObservation>(obj);
-            ASSERT_(obs);
-            process_observation(obs);
+            sensor->doProcess();
+
+            // Get new observations
+            const mrpt::hwdrivers::CGenericSensor::TListObservations lstObjs =
+                sensor->getObservations();
+
+            for (const auto& [t, obj] : lstObjs)
+            {
+                auto obs =
+                    std::dynamic_pointer_cast<mrpt::obs::CObservation>(obj);
+                ASSERT_(obs);
+                process_observation(obs);
+            }
         }
 
         rclcpp::spin_some(this->get_node_base_interface());
@@ -255,12 +279,18 @@ void GenericSensorNode::process_observation(
     }
 
     // Publish tf?
-    if (publish_sensor_pose_tf_)
+    const double tNow = mrpt::Clock::nowDouble();
+
+    if (publish_sensor_pose_tf_ && robot_frame_id_ != sensor_frame_id_ &&
+        tNow - stamp_last_tf_publish_ >= publish_sensor_pose_tf_minimum_period_)
     {
+        ASSERT_(!robot_frame_id_.empty());
+        ASSERT_(!sensor_frame_id_.empty());
+
         geometry_msgs::msg::TransformStamped tf;
         tf.header.stamp = get_clock()->now();
-        tf.header.frame_id = this->robot_frame_id_;
-        tf.child_frame_id = this->sensor_frame_id_;
+        tf.header.frame_id = robot_frame_id_;
+        tf.child_frame_id = sensor_frame_id_;
 
         // Set translation
         tf.transform =
@@ -268,6 +298,15 @@ void GenericSensorNode::process_observation(
 
         // Publish the transform
         tf_bc_->sendTransform(tf);
+
+        stamp_last_tf_publish_ = tNow;
+    }
+
+    // Save to .rawlog?
+    if (out_rawlog_.has_value())
+    {
+        auto out_arch = mrpt::serialization::archiveFrom(*out_rawlog_);
+        out_arch << *o;
     }
 
     // custom handling?
@@ -282,6 +321,12 @@ void GenericSensorNode::process_observation(
         oGPS)
     {
         process(*oGPS);
+    }
+    else if (auto oIMU =
+                 std::dynamic_pointer_cast<mrpt::obs::CObservationIMU>(o);
+             oIMU)
+    {
+        process(*oIMU);
     }
 }
 
@@ -311,6 +356,19 @@ void GenericSensorNode::process(const mrpt::obs::CObservationGPS& o)
     if (!valid) return;
 
     gps_publisher_->publish(msg);
+}
+
+void GenericSensorNode::process(const mrpt::obs::CObservationIMU& o)
+{
+    ensure_publisher_exists<sensor_msgs::msg::Imu>(imu_publisher_);
+
+    auto header = create_header(o);
+
+    auto msg = sensor_msgs::msg::Imu();
+    bool valid = mrpt::ros2bridge::toROS(o, header, msg);
+    if (!valid) return;
+
+    imu_publisher_->publish(msg);
 }
 
 }  // namespace mrpt_sensors

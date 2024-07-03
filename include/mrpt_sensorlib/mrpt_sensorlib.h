@@ -54,12 +54,12 @@ class GenericSensorNode : public rclcpp::Node
     void init(
         const char* templateText,
         const std::vector<TemplateParameter>& rosParams,
-        const std::string& section = "SENSOR");
+        const std::vector<std::string>& sections = {"SENSOR"});
 
     /// Initialize from the given configuration source:
     void init(
         const mrpt::config::CConfigFileBase& config,
-        const std::string& section = "SENSOR");
+        const std::vector<std::string>& sections = {"SENSOR"});
 
     void run();
 
@@ -98,6 +98,8 @@ class GenericSensorNode : public rclcpp::Node
         images_publisher_;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_bc_;
 
+    const auto sensor_frame_id() const { return sensor_frame_id_; }
+
    private:
     // ----------------- ROS 2 params -----------------
     std::string out_rawlog_prefix_;
@@ -113,7 +115,7 @@ class GenericSensorNode : public rclcpp::Node
 
     // -----------------------------------------------
 
-    mrpt::hwdrivers::CGenericSensor::Ptr sensor_;
+    std::vector<mrpt::hwdrivers::CGenericSensor::Ptr> sensors_;
 
     double stamp_last_tf_publish_ = 0;
 

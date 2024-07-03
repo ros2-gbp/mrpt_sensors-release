@@ -35,7 +35,7 @@ pose_y       = ${SENSOR_POSE_Y}
 pose_z       = ${SENSOR_POSE_Z}
 pose_yaw     = ${SENSOR_POSE_YAW}      // (deg)
 pose_pitch   = ${SENSOR_POSE_PITCH}
-pose_z       = ${SENSOR_POSE_ROLL}
+pose_roll    = ${SENSOR_POSE_ROLL}
 
 bumblebee_dc1394_camera_guid   = ${BUMBLEBEE_DC1394_CAMERA_GUID}  // 0 (or not present): the first camera. A hexadecimal number (0x11223344): The GUID of the camera to open
 bumblebee_dc1394_camera_unit   = 0  // 0 (or not present): the first camera. 0,1,2,...: The unit number (within the given GUID) of the camera to open (Stereo cameras: 0 or 1)
@@ -59,7 +59,7 @@ external_images_own_thread  = true
 namespace
 {
 // We will emit two ROS messages per stereo observation.
-void process_gps(
+void process_stereo(
     mrpt_sensors::GenericSensorNode& node,
     const mrpt::obs::CObservation::Ptr& obs)
 {
@@ -107,7 +107,7 @@ int main(int argc, char** argv)
 
         node->custom_process_sensor =
             [&node](const mrpt::obs::CObservation::Ptr& o)
-        { process_gps(*node, o); };
+        { process_stereo(*node, o); };
 
         node->init(
             sensorConfig,
@@ -131,7 +131,7 @@ int main(int argc, char** argv)
                 {"sensor_pose_pitch", "SENSOR_POSE_PITCH", "0", false},
                 {"sensor_pose_roll", "SENSOR_POSE_ROLL", "0", false},
             },
-            "SENSOR");
+            {"SENSOR"});
 
         node->run();
 

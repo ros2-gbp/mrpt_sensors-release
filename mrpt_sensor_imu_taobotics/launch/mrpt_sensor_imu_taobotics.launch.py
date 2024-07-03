@@ -10,7 +10,7 @@ import os
 
 
 def generate_launch_description():
-    namespace = 'gnss'
+    namespace = 'taobotics'
 
     ld = LaunchDescription([
         # COMMON PARAMS TO ALL MRPT_SENSOR NODES:
@@ -18,7 +18,7 @@ def generate_launch_description():
         # Declare an argument for the config file
         DeclareLaunchArgument(
             'process_rate',
-            default_value='"50"',
+            default_value='"500"',
             description='Rate (Hz) for the process() main sensor loop.'
         ),
 
@@ -37,12 +37,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'publish_topic',
             default_value='sensor',
-            description='If not empty, messages of the appropriate type will be published to this topic for each sensor observation.'
+            description='If not empty, messages of type sensor_msg/Imu will be published to this topic for each sensor observation.'
         ),
 
         DeclareLaunchArgument(
             'sensor_frame_id',
-            default_value='sensor',
+            default_value='imu',
             description='The sensor frame_id name. Used to populate msg header and to publish to /tf too.'
         ),
 
@@ -51,19 +51,23 @@ def generate_launch_description():
             default_value='base_link',
             description='The robot frame_id name. Used to publish the sensor pose to /tf.'
         ),
+        DeclareLaunchArgument(
+            'sensor_label',
+            default_value='sensor',
+            description='The sensorLabel field of mrpt::obs::CObservation: a "name" for the sensor.'
+        ),
 
         # PARAMS FOR THIS NODE:
         # --------------------------------------------
         DeclareLaunchArgument(
             'serial_port',
-            default_value='',
-            description='Serial port to open'
+            description='Serial port device to open, e.g. /dev/ttyUSB0'
         ),
 
         DeclareLaunchArgument(
-            'serial_baud_rate',
-            default_value='"4800"',
-            description='Serial port baud rate (typ: 4800, 9600, etc.)'
+            'sensor_model',
+            default_value='"hfi-a9"',
+            description='Sensor model, needed to parse its binary frame protocol. Supported devices (check mrpt::hwdrivers::CTaoboticsIMU) at present are: (hfi-b6|hfi-a9)'
         ),
 
         DeclareLaunchArgument(
@@ -81,6 +85,21 @@ def generate_launch_description():
             default_value='"0.0"',
             description='Sensor pose coordinate on the vehicle frame.'
         ),
+        DeclareLaunchArgument(
+            'sensor_pose_yaw',
+            default_value='"0.0"',
+            description='Sensor pose coordinate on the vehicle frame (degrees).'
+        ),
+        DeclareLaunchArgument(
+            'sensor_pose_pitch',
+            default_value='"0.0"',
+            description='Sensor pose coordinate on the vehicle frame (degrees).'
+        ),
+        DeclareLaunchArgument(
+            'sensor_pose_roll',
+            default_value='"0.0"',
+            description='Sensor pose coordinate on the vehicle frame (degrees).'
+        ),
 
         DeclareLaunchArgument(
             "log_level",
@@ -90,9 +109,9 @@ def generate_launch_description():
 
         # Node to launch the mrpt_generic_sensor_node
         Node(
-            package='mrpt_sensor_gnns_nmea',
-            executable='mrpt_sensor_gnns_nmea_node',
-            name='mrpt_sensor_gnns_nmea',
+            package='mrpt_sensor_imu_taobotics',
+            executable='mrpt_sensor_imu_taobotics_node',
+            name='mrpt_sensor_imu_taobotics',
             output='screen',
             arguments=['--ros-args', '--log-level',
                        LaunchConfiguration('log_level')],
@@ -108,16 +127,21 @@ def generate_launch_description():
                 {'publish_topic': LaunchConfiguration('publish_topic')},
                 {'sensor_frame_id': LaunchConfiguration('sensor_frame_id')},
                 {'robot_frame_id': LaunchConfiguration('robot_frame_id')},
+                {'sensor_label': LaunchConfiguration('sensor_label')},
 
                 # ------------------------------------------------
                 # node params:
                 # ------------------------------------------------
                 {'serial_port': LaunchConfiguration('serial_port')},
-                {'serial_baud_rate': LaunchConfiguration('serial_baud_rate')},
+                {'sensor_model': LaunchConfiguration('sensor_model')},
 
                 {'sensor_pose_x': LaunchConfiguration('sensor_pose_x')},
                 {'sensor_pose_y': LaunchConfiguration('sensor_pose_y')},
                 {'sensor_pose_z': LaunchConfiguration('sensor_pose_z')},
+                {'sensor_pose_yaw': LaunchConfiguration('sensor_pose_yaw')},
+                {'sensor_pose_pitch': LaunchConfiguration(
+                    'sensor_pose_pitch')},
+                {'sensor_pose_roll': LaunchConfiguration('sensor_pose_roll')},
             ]
         )
     ])

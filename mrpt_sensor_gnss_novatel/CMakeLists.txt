@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(mrpt_sensor_gnns_nmea)
+project(mrpt_sensor_gnss_novatel)
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
@@ -23,12 +23,12 @@ add_executable(${PROJECT_NAME}_node src/${PROJECT_NAME}_node.cpp)
 
 ament_target_dependencies(
   ${PROJECT_NAME}_node
-  "rclcpp"
-  "rclcpp_components"
-  "mrpt_sensorlib"
+  rclcpp
+  rclcpp_components
+  mrpt_sensorlib
   mrpt-ros2bridge
   mrpt-hwdrivers
-  "mrpt_msgs"
+  mrpt_msgs
   tf2
   tf2_ros
   tf2_geometry_msgs

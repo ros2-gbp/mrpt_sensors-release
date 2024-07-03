@@ -62,15 +62,76 @@ def generate_launch_description():
         # PARAMS FOR THIS NODE:
         # --------------------------------------------
         DeclareLaunchArgument(
-            'serial_port',
+            'novatel_main_serial_port',
             default_value='',
-            description='Serial port to open'
+            description='Main Novatel comms port'
         ),
-
+        DeclareLaunchArgument(
+            'novatel_ntrip_serial_port',
+            default_value='',
+            description='Novatel comms port that expects NTRIP messages'
+        ),
         DeclareLaunchArgument(
             'serial_baud_rate',
             default_value='"4800"',
             description='Serial port baud rate (typ: 4800, 9600, etc.)'
+        ),
+
+        DeclareLaunchArgument(
+            'raw_dump_file',
+            default_value='""',
+            description='If not empty, raw GNSS data will be dumped to this file.'
+        ),
+
+        DeclareLaunchArgument(
+            'novatel_imu_orientation',
+            default_value='"6"',
+            description='See Novatel docs for SETIMUORIENTATION.'
+        ),
+        DeclareLaunchArgument(
+            'novatel_veh_body_rotation',
+            default_value='"0.000000 0.000000 90.000000 0.000000 0.000000 0.000000"',
+            description='See Novatel docs for VEHICLEBODYROTATION.'
+        ),
+        DeclareLaunchArgument(
+            'novatel_imu_to_ant_offset',
+            default_value='"-0.28 -0.08 -0.01 0.000000 0.000000 0.000000"',
+            description='See Novatel docs for SETIMUTOANTOFFSET.'
+        ),
+        DeclareLaunchArgument(
+            'novatel_ins_offset',
+            default_value='"0.000000 0.000000 0.000000"',
+            description='See Novatel docs for SETINSOFFSET.'
+        ),
+        DeclareLaunchArgument(
+            'novatel_init_azimuth',
+            default_value='"0.000000 25.000000"',
+            description='See Novatel docs for SETINITAZIMUTH.'
+        ),
+        DeclareLaunchArgument(
+            'ntrip_server',
+            default_value='"www.euref-ip.net"',
+            description='DNS or IP of the NTRIP server.'
+        ),
+        DeclareLaunchArgument(
+            'ntrip_port',
+            default_value='"2101"',
+            description='TCP port for connecting to the NTRIP server.'
+        ),
+        DeclareLaunchArgument(
+            'ntrip_mount_point',
+            default_value='"ALME00ESP0"',
+            description='Mount point to connect inside the NTRIP server.'
+        ),
+        DeclareLaunchArgument(
+            'ntrip_user',
+            default_value='""',
+            description='NTRIP server username.'
+        ),
+        DeclareLaunchArgument(
+            'ntrip_password',
+            default_value='""',
+            description='NTRIP server password.'
         ),
 
         DeclareLaunchArgument(
@@ -97,9 +158,9 @@ def generate_launch_description():
 
         # Node to launch the mrpt_generic_sensor_node
         Node(
-            package='mrpt_sensor_gnns_nmea',
-            executable='mrpt_sensor_gnns_nmea_node',
-            name='mrpt_sensor_gnns_nmea',
+            package='mrpt_sensor_gnss_novatel',
+            executable='mrpt_sensor_gnss_novatel_node',
+            name='mrpt_sensor_gnss_novatel',
             output='screen',
             arguments=['--ros-args', '--log-level',
                        LaunchConfiguration('log_level')],
@@ -120,8 +181,28 @@ def generate_launch_description():
                 # ------------------------------------------------
                 # node params:
                 # ------------------------------------------------
-                {'serial_port': LaunchConfiguration('serial_port')},
+                {'novatel_main_serial_port': LaunchConfiguration(
+                    'novatel_main_serial_port')},
                 {'serial_baud_rate': LaunchConfiguration('serial_baud_rate')},
+                {'novatel_ntrip_serial_port': LaunchConfiguration(
+                    'novatel_ntrip_serial_port')},
+                {'raw_dump_file': LaunchConfiguration('raw_dump_file')},
+                {'novatel_imu_orientation': LaunchConfiguration(
+                    'novatel_imu_orientation')},
+                {'novatel_veh_body_rotation': LaunchConfiguration(
+                    'novatel_veh_body_rotation')},
+                {'novatel_imu_to_ant_offset': LaunchConfiguration(
+                    'novatel_imu_to_ant_offset')},
+                {'novatel_ins_offset': LaunchConfiguration(
+                    'novatel_ins_offset')},
+                {'novatel_init_azimuth': LaunchConfiguration(
+                    'novatel_init_azimuth')},
+                {'ntrip_server': LaunchConfiguration('ntrip_server')},
+                {'ntrip_port': LaunchConfiguration('ntrip_port')},
+                {'ntrip_mount_point': LaunchConfiguration(
+                    'ntrip_mount_point')},
+                {'ntrip_user': LaunchConfiguration('ntrip_user')},
+                {'ntrip_password': LaunchConfiguration('ntrip_password')},
 
                 {'sensor_pose_x': LaunchConfiguration('sensor_pose_x')},
                 {'sensor_pose_y': LaunchConfiguration('sensor_pose_y')},

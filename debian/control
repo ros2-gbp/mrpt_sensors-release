@@ -1,0 +1,13 @@
+Source: ros-jazzy-mrpt-sensors
+Section: misc
+Priority: optional
+Maintainer: Jose-Luis Blanco-Claraco <jlblanco@ual.es>
+Build-Depends: debhelper (>= 9.0.0), ros-jazzy-ament-cmake, ros-jazzy-ament-lint-auto, ros-jazzy-ament-lint-common, ros-jazzy-mrpt-generic-sensor, ros-jazzy-mrpt-sensor-bumblebee-stereo, ros-jazzy-mrpt-sensor-gnss-nmea, ros-jazzy-mrpt-sensor-gnss-novatel, ros-jazzy-mrpt-sensor-imu-taobotics, ros-jazzy-mrpt-sensorlib, ros-jazzy-ros-workspace
+Homepage: https://github.com/mrpt-ros-pkg/mrpt_sensors/
+Standards-Version: 3.9.2
+
+Package: ros-jazzy-mrpt-sensors
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-jazzy-ament-lint-auto, ros-jazzy-ament-lint-common, ros-jazzy-mrpt-generic-sensor, ros-jazzy-mrpt-sensor-bumblebee-stereo, ros-jazzy-mrpt-sensor-gnss-nmea, ros-jazzy-mrpt-sensor-gnss-novatel, ros-jazzy-mrpt-sensor-imu-taobotics, ros-jazzy-mrpt-sensorlib, ros-jazzy-ros-workspace
+Description: ROS nodes for various robotics sensors via mrpt-hwdrivers.
+ Metapackage for all mrpt_sensor packages.

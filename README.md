@@ -1,3 +1,33 @@
+## mrpt_sensors (iron) - 0.2.2-1
+
+The packages in the `mrpt_sensors` repository were released into the `iron` distro by running `/usr/bin/bloom-release -y -r iron mrpt_sensors` on `Fri, 09 Aug 2024 20:00:06 -0000`
+
+These packages were released:
+- `mrpt_generic_sensor`
+- `mrpt_sensor_bumblebee_stereo`
+- `mrpt_sensor_gnss_nmea`
+- `mrpt_sensor_gnss_novatel`
+- `mrpt_sensor_imu_taobotics`
+- `mrpt_sensorlib`
+- `mrpt_sensors`
+
+Version of package(s) in repository `mrpt_sensors`:
+
+- upstream repository: https://github.com/mrpt-ros-pkg/mrpt_sensors.git
+- release repository: https://github.com/ros2-gbp/mrpt_sensors-release.git
+- rosdistro version: `0.2.1-1`
+- old version: `0.2.1-1`
+- new version: `0.2.2-1`
+
+Versions of tools used:
+
+- bloom version: `0.12.0`
+- catkin_pkg version: `1.0.0`
+- rosdep version: `0.24.0`
+- rosdistro version: `0.9.1`
+- vcstools version: `0.1.42`
+
+
 ## mrpt_sensors (humble) - 0.2.2-1
 
 The packages in the `mrpt_sensors` repository were released into the `humble` distro by running `/usr/bin/bloom-release -y -r humble mrpt_sensors` on `Fri, 09 Aug 2024 19:56:08 -0000`

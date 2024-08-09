@@ -1,0 +1,12 @@
+Source: ros-humble-mrpt-sensor-bumblebee-stereo
+Section: misc
+Priority: optional
+Maintainer: José Luis Blanco-Claraco <joseluisblancoc@gmail.com>
+Build-Depends: debhelper (>= 9.0.0), ros-humble-ament-cmake, ros-humble-ament-lint-auto, ros-humble-ament-lint-common, ros-humble-mrpt-msgs, ros-humble-mrpt-sensorlib, ros-humble-mrpt2, ros-humble-rclcpp, ros-humble-rclcpp-components, ros-humble-ros-environment, ros-humble-tf2, ros-humble-tf2-ros, ros-humble-ros-workspace
+Homepage: https://github.com/mrpt-ros-pkg/mrpt_sensors
+Standards-Version: 3.9.2
+
+Package: ros-humble-mrpt-sensor-bumblebee-stereo
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-humble-ament-lint-auto, ros-humble-ament-lint-common, ros-humble-mrpt-msgs, ros-humble-mrpt-sensorlib, ros-humble-mrpt2, ros-humble-rclcpp, ros-humble-rclcpp-components, ros-humble-tf2, ros-humble-tf2-ros, ros-humble-ros-workspace
+Description: ROS node for Bumblebee Stereo Cameras using libdc1394 interface (based on mrpt-hwdrivers)

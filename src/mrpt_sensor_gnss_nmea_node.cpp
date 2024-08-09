@@ -126,6 +126,9 @@ void process_gps(
     ASSERT_(o);
 
     auto& pubs = NMEA_Pubs::Instance();
+
+    pubs.ensure_pubs_are_created(node, node.publish_topic());
+
     std_msgs::msg::Header msgHeader;
     msgHeader.frame_id = node.sensor_frame_id();
     msgHeader.stamp = mrpt::ros2bridge::toROS(obs->timestamp);

@@ -1,0 +1,22 @@
+ros-jazzy-mrpt-sensor-gnss-novatel (0.2.3-1noble) noble; urgency=high
+
+  * Update copyright comment blocks to try to make ament linter happy
+  * Depend on new mrpt_lib packages (deprecate mrpt2)
+  * Update to package XML format 3
+  * Contributors: Jose Luis Blanco-Claraco
+
+ -- José Luis Blanco-Claraco <joseluisblancoc@gmail.com>  Sat, 31 Aug 2024 22:00:00 -0000
+
+ros-jazzy-mrpt-sensor-gnss-novatel (0.2.2-1noble) noble; urgency=high
+
+
+
+ -- José Luis Blanco-Claraco <joseluisblancoc@gmail.com>  Thu, 08 Aug 2024 22:00:00 -0000
+
+ros-jazzy-mrpt-sensor-gnss-novatel (0.2.1-1noble) noble; urgency=high
+
+
+
+ -- José Luis Blanco-Claraco <joseluisblancoc@gmail.com>  Tue, 02 Jul 2024 22:00:00 -0000
+
+

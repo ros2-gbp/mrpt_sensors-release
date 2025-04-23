@@ -1,1 +1,1 @@
-{"base": "adddc51", "parent": "debian/rolling/mrpt_sensor_gnss_nmea", "previous": "6fa3d20", "trim": "", "trimbase": ""}
+{"base": "32bafc4bf3a0", "parent": "debian/kilted/mrpt_sensor_gnss_nmea", "previous": "5094a76f8f9a", "trim": "", "trimbase": ""}

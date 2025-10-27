@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>mrpt_sensorlib</name>
-  <version>0.2.3</version>
+  <version>0.2.4</version>
   <description>C++ library for the base generic MRPT sensor node</description>
 
   <url type="website">https://github.com/mrpt-ros-pkg/mrpt_sensors</url>
   <maintainer email="joseluisblancoc@gmail.com">José Luis Blanco-Claraco</maintainer>
   <author>José Luis Blanco-Claraco</author>
-  <license>BSD</license>
+  <license>BSD-3-Clause</license>
 
   <build_depend>ros_environment</build_depend>
   <buildtool_depend>ament_cmake</buildtool_depend>

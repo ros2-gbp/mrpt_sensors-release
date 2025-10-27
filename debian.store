@@ -1,1 +1,1 @@
-{"base": "ffb6fdd783e0", "parent": "debian/kilted/mrpt_sensor_imu_taobotics", "previous": "4fe2c53ae3f2", "trim": "", "trimbase": ""}
+{"base": "19f3965", "parent": "debian/kilted/mrpt_sensor_imu_taobotics", "previous": "08359d7", "trim": "", "trimbase": ""}

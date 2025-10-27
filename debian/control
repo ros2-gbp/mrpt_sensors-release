@@ -1,0 +1,12 @@
+Source: ros-kilted-mrpt-generic-sensor
+Section: misc
+Priority: optional
+Maintainer: José Luis Blanco-Claraco <joseluisblancoc@gmail.com>
+Build-Depends: debhelper (>= 9.0.0), ros-kilted-ament-cmake, ros-kilted-ament-lint-auto, ros-kilted-ament-lint-common, ros-kilted-mrpt-msgs, ros-kilted-mrpt-sensorlib, ros-kilted-rclcpp, ros-kilted-rclcpp-components, ros-kilted-ros-environment, ros-kilted-sensor-msgs, ros-kilted-tf2, ros-kilted-tf2-geometry-msgs, ros-kilted-tf2-ros, ros-kilted-ros-workspace
+Homepage: https://github.com/mrpt-ros-pkg/mrpt_sensors
+Standards-Version: 3.9.2
+
+Package: ros-kilted-mrpt-generic-sensor
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-kilted-ament-lint-auto, ros-kilted-ament-lint-common, ros-kilted-mrpt-msgs, ros-kilted-mrpt-sensorlib, ros-kilted-rclcpp, ros-kilted-rclcpp-components, ros-kilted-sensor-msgs, ros-kilted-tf2, ros-kilted-tf2-geometry-msgs, ros-kilted-tf2-ros, ros-kilted-ros-workspace
+Description: ROS node for interfacing any sensor supported by mrpt-hwdrivers

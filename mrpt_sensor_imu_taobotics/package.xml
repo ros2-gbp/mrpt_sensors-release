@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>mrpt_sensor_imu_taobotics</name>
-  <version>0.2.3</version>
+  <version>0.2.4</version>
   <description>ROS node for Taobotics USB IMUs (based on mrpt-hwdrivers)</description>
 
   <url type="website">https://github.com/mrpt-ros-pkg/mrpt_sensors</url>
@@ -9,7 +9,7 @@
 
   <author>José Luis Blanco-Claraco</author>
 
-  <license>BSD</license>
+  <license>BSD-3-Clause</license>
   <url>https://wiki.ros.org/mrpt_msgs_bridge</url>
 
   <build_depend>ros_environment</build_depend>

@@ -1,1 +1,1 @@
-{"base": "037e1c6", "parent": "debian/rolling/mrpt_sensor_imu_taobotics", "previous": "1fb20af", "trim": "", "trimbase": ""}
+{"base": "f65a982", "parent": "debian/rolling/mrpt_sensor_imu_taobotics", "previous": "78e60df", "trim": "", "trimbase": ""}

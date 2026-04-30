@@ -1,1 +1,1 @@
-{"base": "8751f53c5570", "parent": "debian/rolling/mrpt_generic_sensor", "previous": "d123af6401b2", "trim": "", "trimbase": ""}
+{"base": "55c5fd4014ae", "parent": "debian/lyrical/mrpt_generic_sensor", "previous": "9de51713b940", "trim": "", "trimbase": ""}

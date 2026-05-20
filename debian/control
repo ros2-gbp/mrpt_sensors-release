@@ -1,0 +1,12 @@
+Source: ros-jazzy-novatel-oem6-msgs
+Section: misc
+Priority: optional
+Maintainer: "Jose-Luis Blanco-Claraco" <jlblanco@ual.es>
+Build-Depends: debhelper (>= 9.0.0), ros-jazzy-ament-cmake, ros-jazzy-ament-cmake-xmllint <!nocheck>, ros-jazzy-ros-environment, ros-jazzy-rosidl-default-generators, ros-jazzy-std-msgs, ros-jazzy-ros-workspace, ros-jazzy-rosidl-typesupport-fastrtps-c, ros-jazzy-rosidl-typesupport-fastrtps-cpp
+Homepage: https://index.ros.org/p/novatel_oem6_msgs/#jazzy
+Standards-Version: 3.9.2
+
+Package: ros-jazzy-novatel-oem6-msgs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-jazzy-rosidl-default-runtime, ros-jazzy-std-msgs, ros-jazzy-ros-workspace
+Description: ROS messages and services for Novatel OEM6

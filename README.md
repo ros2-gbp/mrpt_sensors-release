@@ -5,9 +5,14 @@
 | Distro | Build dev | Release |
 | --- | --- | --- |
 | ROS 2 Humble (u22.04) | [![Build Status](https://build.ros2.org/job/Hdev__mrpt_sensors__ubuntu_jammy_amd64/badge/icon)](https://build.ros2.org/job/Hdev__mrpt_sensors__ubuntu_jammy_amd64/) | [![Version](https://img.shields.io/ros/v/humble/mrpt_sensors)](https://index.ros.org/search/?term=mrpt_sensors) |
-| ROS 2 Iron (u22.04) | [![Build Status](https://build.ros2.org/job/Idev__mrpt_sensors__ubuntu_jammy_amd64/badge/icon)](https://build.ros2.org/job/Idev__mrpt_sensors__ubuntu_jammy_amd64/) | [![Version](https://img.shields.io/ros/v/iron/mrpt_sensors)](https://index.ros.org/search/?term=mrpt_sensors) |
 | ROS 2 Jazzy (u24.04) | [![Build Status](https://build.ros2.org/job/Jdev__mrpt_sensors__ubuntu_noble_amd64/badge/icon)](https://build.ros2.org/job/Jdev__mrpt_sensors__ubuntu_noble_amd64/) | [![Version](https://img.shields.io/ros/v/jazzy/mrpt_sensors)](https://index.ros.org/search/?term=mrpt_sensors) |
+| ROS 2 Kilted (u24.04) | [![Build Status](https://build.ros2.org/job/Kdev__mrpt_sensors__ubuntu_noble_amd64/badge/icon)](https://build.ros2.org/job/Kdev__mrpt_sensors__ubuntu_noble_amd64/) | [![Version](https://img.shields.io/ros/v/kilted/mrpt_sensors)](https://index.ros.org/search/?term=mrpt_sensors) |
 | ROS 2 Rolling (u24.04) | [![Build Status](https://build.ros2.org/job/Rdev__mrpt_sensors__ubuntu_noble_amd64/badge/icon)](https://build.ros2.org/job/Rdev__mrpt_sensors__ubuntu_noble_amd64/) | [![Version](https://img.shields.io/ros/v/rolling/mrpt_sensors)](https://index.ros.org/search/?term=mrpt_sensors) |
+
+| EOL Distro | Last release |
+| --- | --- |
+| ROS 2 Iron (u22.04) | [![Version](https://img.shields.io/ros/v/iron/mrpt_sensors)](https://index.ros.org/search/?term=mrpt_sensors) |
+
 
 # mrpt_sensors
 ROS nodes for various robotics sensors via mrpt-hwdrivers.
@@ -17,11 +22,97 @@ All packages follow [REP-2003](https://ros.org/reps/rep-2003.html) regarding ROS
 <!-- md_toc github  < README.md -->
 
 # Table of Contents
+- [Diagnostics support](#diagnostics-support)
 - [`mrpt_sensor_bumblebee_stereo`](#mrpt_sensor_bumblebee_stereo)
 - [`mrpt_sensor_gnss_nmea`](#mrpt_sensor_gnss_nmea)
+- [`mrpt_sensor_gnss_novatel`](#mrpt_sensor_gnss_novatel)
 - [`mrpt_sensor_imu_taobotics`](#mrpt_sensor_imu_taobotics)
 - [`mrpt_sensor_velodyne`](#mrpt_sensor_velodyne)
+- [novatel_oem6_msgs](novatel_oem6_msgs/)
 - [Individual package build status](#individual-package-build-status)
+
+# Diagnostics support
+
+All sensor nodes in this package publish ROS 2 diagnostics to the `/diagnostics` topic via the
+[`diagnostic_updater`](https://github.com/ros/diagnostics) package. The diagnostic status tracks
+these conditions:
+
+| Status | Condition |
+|--------|-----------|
+| `WARN` | Node started but no observation has arrived yet within the startup timeout window |
+| `ERROR` | Sensor exception (e.g., serial port unavailable) - node keeps retrying every `retry_on_error_delay` seconds |
+| `ERROR` | Sensor was working but no observation has been received for longer than 3x the expected period |
+| `WARN` | Observation rate is below 50% of the configured expected rate |
+| `OK` | Observations are arriving at the expected rate |
+
+ROS 2 parameters controlling diagnostic thresholds and retry behavior (settable at launch or via `ros2 param set`):
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `diag_startup_timeout` | `30.0` s | How long to wait for the first observation before reporting an error |
+| `diag_expected_rate` | `1.0` Hz | Expected observation rate; used for stale and rate-warning checks |
+| `retry_on_error_delay` | `5.0` s | How long to wait before retrying after a sensor exception |
+
+The diagnostic status also reports the measured observation rate, the observation count, and the
+hardware ID (node name).
+
+## Viewing diagnostics
+
+Echo the raw topic directly:
+
+```bash
+ros2 topic echo /diagnostics
+```
+
+For a human-friendly live view, use `rqt_runtime_monitor` or the `ros2 run` equivalent:
+
+```bash
+ros2 run rqt_runtime_monitor rqt_runtime_monitor
+```
+
+## Running a diagnostic aggregator
+
+The `diagnostic_aggregator` collects and categorizes `/diagnostics` messages into
+`/diagnostics_agg`. This is required by tools such as `robot_monitor`. To launch one quickly for
+testing, install the package and create a minimal analyzers config:
+
+```bash
+sudo apt install ros-${ROS_DISTRO}-diagnostic-aggregator
+```
+
+Create a file `analyzers.yaml`:
+
+```yaml
+analyzers:
+  ros__parameters:
+    path: Sensors
+    sensors:
+      type: diagnostic_aggregator/GenericAnalyzer
+      path: Sensors
+      contains:
+        - 'Sensor status'
+```
+
+Then run the aggregator with that config:
+
+```bash
+ros2 run diagnostic_aggregator aggregator_node --ros-args \
+    --params-file analyzers.yaml
+```
+
+In a separate terminal, echo the aggregated output:
+
+```bash
+ros2 topic echo /diagnostics_agg
+```
+
+Or open `rqt_robot_monitor` for a tree view:
+
+```bash
+ros2 run rqt_robot_monitor rqt_robot_monitor
+```
+
+---
 
 # `mrpt_sensor_bumblebee_stereo`
 
@@ -344,6 +435,85 @@ Arguments (pass arguments as '<name>:=<value>'):
 </details>
 
 
+<details>
+  <summary>Quick Reference: SendNovatelCommand Service</summary>
+
+## Service Call from Command Line
+
+### Basic Syntax
+```bash
+ros2 service call /gnss/mrpt_sensor_gnss_novatel/send_novatel_command \
+    novatel_oem6_msgs/srv/SendNovatelCommand \
+    "{command: 'YOUR_COMMAND_HERE'}"
+```
+
+## Common Examples
+
+### Set Initial Azimuth (Critical for INS Alignment)
+```bash
+# Format: SETINITAZIMUTH <azimuth_degrees> <std_dev_degrees>
+ros2 service call /gnss/mrpt_sensor_gnss_novatel/send_novatel_command \
+    novatel_oem6_msgs/srv/SendNovatelCommand \
+    "{command: 'SETINITAZIMUTH 90.0 10.0'}"
+```
+
+### Configure IMU Orientation
+```bash
+# See Novatel manual Table 9 for orientation codes
+ros2 service call /gnss/mrpt_sensor_gnss_novatel/send_novatel_command \
+    novatel_oem6_msgs/srv/SendNovatelCommand \
+    "{command: 'SETIMUORIENTATION 6'}"
+```
+
+### INS Control Commands
+```bash
+# Enable INS
+ros2 service call /gnss/mrpt_sensor_gnss_novatel/send_novatel_command \
+    novatel_oem6_msgs/srv/SendNovatelCommand \
+    "{command: 'INSCOMMAND ENABLE'}"
+
+# Disable INS
+ros2 service call /gnss/mrpt_sensor_gnss_novatel/send_novatel_command \
+    novatel_oem6_msgs/srv/SendNovatelCommand \
+    "{command: 'INSCOMMAND DISABLE'}"
+
+# Reset INS
+ros2 service call /gnss/mrpt_sensor_gnss_novatel/send_novatel_command \
+    novatel_oem6_msgs/srv/SendNovatelCommand \
+    "{command: 'INSCOMMAND RESET'}"
+```
+
+### Alignment Mode
+```bash
+# Set alignment mode (UNAIDED, KINEMATIC, AUTOMATIC, etc.)
+ros2 service call /gnss/mrpt_sensor_gnss_novatel/send_novatel_command \
+    novatel_oem6_msgs/srv/SendNovatelCommand \
+    "{command: 'ALIGNMENTMODE UNAIDED'}"
+```
+
+### Satellite Configuration
+```bash
+# Set elevation mask (degrees above horizon)
+ros2 service call /gnss/mrpt_sensor_gnss_novatel/send_novatel_command \
+    novatel_oem6_msgs/srv/SendNovatelCommand \
+    "{command: 'ECUTOFF 10'}"
+
+# Set C/N0 mask (signal strength threshold)
+ros2 service call /gnss/mrpt_sensor_gnss_novatel/send_novatel_command \
+    novatel_oem6_msgs/srv/SendNovatelCommand \
+    "{command: 'CNOECUTOFF 25'}"
+```
+
+## Notes
+
+1. **CR+LF Added Automatically**: You don't need to add `\r\n` - the service does this
+2. **Command Case**: Commands are case-insensitive in Novatel firmware
+3. **Service Namespace**: Default is `/gnss/mrpt_sensor_gnss_novatel/`
+4. **Response**: Service returns `done_ok: true` if command was sent (not if it succeeded on receiver)
+5. **Verification**: Check receiver response by monitoring the node's log output or relevant message topics
+
+</details>
+
 # `mrpt_sensor_imu_taobotics`
 
 Supported models: `hfi-b6`, `hfi-a9`
@@ -445,11 +615,13 @@ TODO: Document and explain parameters.
 
 # Individual package build status
 
-| Package | ROS 2 Humble <br/> BinBuild |  ROS 2 Iron <br/> BinBuild | ROS 2 Jazzy <br/> BinBuild | ROS 2 Rolling <br/> BinBuild |
+| Package | ROS 2 Humble <br/> BinBuild | ROS 2 Jazzy <br/> BinBuild | ROS 2 Kilted <br/> BinBuild |  ROS 2 Rolling <br/> BinBuild |
 | --- | --- | --- | --- |--- |
-| mrpt_generic_sensor | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_generic_sensor__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_generic_sensor__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Ibin_uJ64__mrpt_generic_sensor__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Ibin_uJ64__mrpt_generic_sensor__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_generic_sensor__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_generic_sensor__ubuntu_noble_amd64__binary/) |[![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_generic_sensor__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_generic_sensor__ubuntu_noble_amd64__binary/) |
-| mrpt_sensor_bumblebee_stereo | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_bumblebee_stereo__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_bumblebee_stereo__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Ibin_uJ64__mrpt_sensor_bumblebee_stereo__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Ibin_uJ64__mrpt_sensor_bumblebee_stereo__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_bumblebee_stereo__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_bumblebee_stereo__ubuntu_noble_amd64__binary/) |[![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_bumblebee_stereo__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_bumblebee_stereo__ubuntu_noble_amd64__binary/) |
-| mrpt_sensor_gnss_nmea | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_gnss_nmea__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_gnss_nmea__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Ibin_uJ64__mrpt_sensor_gnss_nmea__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Ibin_uJ64__mrpt_sensor_gnss_nmea__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_gnss_nmea__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_gnss_nmea__ubuntu_noble_amd64__binary/) |[![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_gnss_nmea__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_gnss_nmea__ubuntu_noble_amd64__binary/) |
-| mrpt_sensor_imu_taobotics | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_imu_taobotics__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_imu_taobotics__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Ibin_uJ64__mrpt_sensor_imu_taobotics__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Ibin_uJ64__mrpt_sensor_imu_taobotics__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_imu_taobotics__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_imu_taobotics__ubuntu_noble_amd64__binary/) |[![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_imu_taobotics__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_imu_taobotics__ubuntu_noble_amd64__binary/) |
-| mrpt_sensorlib | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensorlib__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensorlib__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Ibin_uJ64__mrpt_sensorlib__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Ibin_uJ64__mrpt_sensorlib__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_sensorlib__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_sensorlib__ubuntu_noble_amd64__binary/) |[![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_sensorlib__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_sensorlib__ubuntu_noble_amd64__binary/) |
-| mrpt_sensors | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensors__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensors__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Ibin_uJ64__mrpt_sensors__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Ibin_uJ64__mrpt_sensors__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_sensors__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_sensors__ubuntu_noble_amd64__binary/) |[![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_sensors__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_sensors__ubuntu_noble_amd64__binary/) |
+| mrpt_generic_sensor | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_generic_sensor__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_generic_sensor__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_generic_sensor__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_generic_sensor__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Kbin_uN64__mrpt_generic_sensor__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Kbin_uN64__mrpt_generic_sensor__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_generic_sensor__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_generic_sensor__ubuntu_noble_amd64__binary/) |
+| mrpt_sensor_bumblebee_stereo | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_bumblebee_stereo__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_bumblebee_stereo__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_bumblebee_stereo__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_bumblebee_stereo__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Kbin_uN64__mrpt_sensor_bumblebee_stereo__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Kbin_uN64__mrpt_sensor_bumblebee_stereo__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_bumblebee_stereo__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_bumblebee_stereo__ubuntu_noble_amd64__binary/) |
+| mrpt_sensor_gnss_nmea | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_gnss_nmea__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_gnss_nmea__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_gnss_nmea__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_gnss_nmea__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Kbin_uN64__mrpt_sensor_gnss_nmea__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Kbin_uN64__mrpt_sensor_gnss_nmea__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_gnss_nmea__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_gnss_nmea__ubuntu_noble_amd64__binary/) |
+| mrpt_sensor_gnss_novatel | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_gnss_novatel__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_gnss_novatel__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_gnss_novatel__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_gnss_novatel__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Kbin_uN64__mrpt_sensor_gnss_novatel__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Kbin_uN64__mrpt_sensor_gnss_novatel__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_gnss_novatel__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_gnss_novatel__ubuntu_noble_amd64__binary/) |
+| mrpt_sensor_imu_taobotics | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_imu_taobotics__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensor_imu_taobotics__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_imu_taobotics__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_sensor_imu_taobotics__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Kbin_uN64__mrpt_sensor_imu_taobotics__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Kbin_uN64__mrpt_sensor_imu_taobotics__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_imu_taobotics__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_sensor_imu_taobotics__ubuntu_noble_amd64__binary/) |
+| mrpt_sensorlib | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensorlib__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensorlib__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_sensorlib__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_sensorlib__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Kbin_uN64__mrpt_sensorlib__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Kbin_uN64__mrpt_sensorlib__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_sensorlib__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_sensorlib__ubuntu_noble_amd64__binary/) |
+| mrpt_sensors | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensors__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__mrpt_sensors__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__mrpt_sensors__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__mrpt_sensors__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Kbin_uN64__mrpt_sensors__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Kbin_uN64__mrpt_sensors__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Rbin_uN64__mrpt_sensors__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__mrpt_sensors__ubuntu_noble_amd64__binary/) |
+| novatel_oem6_msgs | [![Build Status](https://build.ros2.org/job/Hbin_uJ64__novatel_oem6_msgs__ubuntu_jammy_amd64__binary/badge/icon)](https://build.ros2.org/job/Hbin_uJ64__novatel_oem6_msgs__ubuntu_jammy_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Jbin_uN64__novatel_oem6_msgs__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Jbin_uN64__novatel_oem6_msgs__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Kbin_uN64__novatel_oem6_msgs__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Kbin_uN64__novatel_oem6_msgs__ubuntu_noble_amd64__binary/) | [![Build Status](https://build.ros2.org/job/Rbin_uN64__novatel_oem6_msgs__ubuntu_noble_amd64__binary/badge/icon)](https://build.ros2.org/job/Rbin_uN64__novatel_oem6_msgs__ubuntu_noble_amd64__binary/) |

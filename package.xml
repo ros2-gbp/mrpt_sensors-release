@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>mrpt_generic_sensor</name>
-  <version>0.2.4</version>
+  <version>0.3.0</version>
   <description>ROS node for interfacing any sensor supported by mrpt-hwdrivers</description>
 
   <url type="website">https://github.com/mrpt-ros-pkg/mrpt_sensors</url>
@@ -25,8 +25,8 @@
   <depend>sensor_msgs</depend>
   <depend>mrpt_msgs</depend>
 
-  <depend>ament_lint_common</depend>
-  <depend>ament_lint_auto</depend>
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_cmake_xmllint</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

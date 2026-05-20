@@ -6,12 +6,11 @@ find_package(ament_cmake REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
-find_package(tf2 REQUIRED)
-find_package(tf2_ros REQUIRED)
 
 find_package(mrpt_msgs REQUIRED)
 find_package(mrpt-ros2bridge REQUIRED)
 find_package(mrpt-hwdrivers REQUIRED)
+find_package(diagnostic_updater REQUIRED)
 
 message(STATUS "MRPT_VERSION: ${mrpt-hwdrivers_VERSION}")
 
@@ -62,6 +61,7 @@ target_link_libraries(${PROJECT_NAME}
   tf2_geometry_msgs::tf2_geometry_msgs
   tf2::tf2
   tf2_ros::tf2_ros
+  diagnostic_updater::diagnostic_updater
 )
 
 
@@ -75,7 +75,7 @@ target_link_libraries(${PROJECT_NAME}
 # Export modern CMake targets
 ament_export_targets(${PROJECT_NAME})
 
-ament_export_dependencies()
+ament_export_dependencies(diagnostic_updater)
 
 install(
   TARGETS ${PROJECT_NAME}
@@ -88,17 +88,8 @@ install(
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
-  find_package(ament_cmake_copyright REQUIRED)
-  find_package(ament_cmake_cpplint REQUIRED)
-  find_package(ament_cmake_lint_cmake REQUIRED)
-  find_package(ament_cmake_xmllint REQUIRED)
-
-  # the following line skips the linter which checks for copyrights
-  # uncomment the line when a copyright and license is not present in all source files
-  #set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # uncomment the line when this package is not in a git repo
-  #set(ament_cmake_cpplint_FOUND TRUE)
+  set(ament_cmake_copyright_FOUND TRUE)
+  set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
 

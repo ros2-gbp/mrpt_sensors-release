@@ -1,0 +1,15 @@
+ros-lyrical-novatel-oem6-msgs (0.3.0-1resolute) resolute; urgency=high
+
+  * Publish oem6 ros2 messages too
+  * Add novatel_oem6_msgs package and service to send custom commands to Novatel
+  * Contributors: Jose Luis Blanco-Claraco
+
+ -- "Jose-Luis Blanco-Claraco" <jlblanco@ual.es>  Tue, 19 May 2026 22:00:00 -0000
+
+ros-lyrical-novatel-oem6-msgs (0.2.4-1resolute) resolute; urgency=high
+
+  * Contributors: Jose Luis Blanco-Claraco
+
+ -- "Jose-Luis Blanco-Claraco" <jlblanco@ual.es>  Sun, 26 Oct 2025 23:00:00 -0000
+
+

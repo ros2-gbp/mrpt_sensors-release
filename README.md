@@ -1,3 +1,34 @@
+## mrpt_sensors (humble) - 0.4.0-1
+
+The packages in the `mrpt_sensors` repository were released into the `humble` distro by running `/usr/bin/bloom-release --rosdistro humble --track humble mrpt_sensors` on `Thu, 01 Oct 2026 11:35:30 -0000`
+
+These packages were released:
+- `mrpt_generic_sensor`
+- `mrpt_sensor_bumblebee_stereo`
+- `mrpt_sensor_gnss_nmea`
+- `mrpt_sensor_gnss_novatel`
+- `mrpt_sensor_imu_taobotics`
+- `mrpt_sensorlib`
+- `mrpt_sensors`
+- `novatel_oem6_msgs`
+
+Version of package(s) in repository `mrpt_sensors`:
+
+- upstream repository: https://github.com/mrpt-ros-pkg/mrpt_sensors.git
+- release repository: https://github.com/ros2-gbp/mrpt_sensors-release.git
+- rosdistro version: `0.3.0-1`
+- old version: `0.3.0-1`
+- new version: `0.4.0-1`
+
+Versions of tools used:
+
+- bloom version: `0.14.4`
+- catkin_pkg version: `1.1.1`
+- rosdep version: `0.27.0`
+- rosdistro version: `1.1.0`
+- vcstools version: `0.1.42`
+
+
 ## mrpt_sensors (jazzy) - 0.4.0-1
 
 The packages in the `mrpt_sensors` repository were released into the `jazzy` distro by running `/usr/bin/bloom-release --rosdistro jazzy --track jazzy mrpt_sensors` on `Thu, 01 Oct 2026 11:32:46 -0000`

@@ -1,3 +1,34 @@
+## mrpt_sensors (rolling) - 0.4.1-1
+
+The packages in the `mrpt_sensors` repository were released into the `rolling` distro by running `/home/jlblanco/code/bloom-venv/bin/bloom-release -y -r rolling mrpt_sensors` on `Tue, 27 Oct 2026 22:08:27 -0000`
+
+These packages were released:
+- `mrpt_generic_sensor`
+- `mrpt_sensor_bumblebee_stereo`
+- `mrpt_sensor_gnss_nmea`
+- `mrpt_sensor_gnss_novatel`
+- `mrpt_sensor_imu_taobotics`
+- `mrpt_sensorlib`
+- `mrpt_sensors`
+- `novatel_oem6_msgs`
+
+Version of package(s) in repository `mrpt_sensors`:
+
+- upstream repository: https://github.com/mrpt-ros-pkg/mrpt_sensors.git
+- release repository: https://github.com/ros2-gbp/mrpt_sensors-release.git
+- rosdistro version: `0.4.0-1`
+- old version: `0.4.0-1`
+- new version: `0.4.1-1`
+
+Versions of tools used:
+
+- bloom version: `0.14.3`
+- catkin_pkg version: `0.5.2`
+- rosdep version: `0.22.2`
+- rosdistro version: `0.9.0`
+- vcstools version: `0.1.42`
+
+
 ## mrpt_sensors (lyrical) - 0.4.1-1
 
 The packages in the `mrpt_sensors` repository were released into the `lyrical` distro by running `/home/jlblanco/code/bloom-venv/bin/bloom-release -y -r lyrical mrpt_sensors` on `Tue, 27 Oct 2026 22:06:06 -0000`

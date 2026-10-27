@@ -37,6 +37,7 @@
 
 #include <mrpt/core/Clock.h>
 #include <mrpt/core/bits_math.h>  // square()
+#include <mrpt/core/format.h>
 #include <mrpt/core/get_env.h>
 #include <mrpt/hwdrivers/CGPSInterface.h>
 #include <mrpt/math/wrap2pi.h>
@@ -47,6 +48,9 @@
 #include <mrpt/system/COutputLogger.h>
 
 #include <cmath>
+#include <cstring>
+#include <diagnostic_msgs/msg/diagnostic_status.hpp>
+#include <memory>
 #include <mutex>
 #include <novatel_oem6_msgs/msg/bestpos.hpp>
 #include <novatel_oem6_msgs/msg/detail/inscovs__struct.hpp>
@@ -64,6 +68,7 @@
 #include <novatel_oem6_msgs/msg/mark2_time.hpp>
 #include <novatel_oem6_msgs/msg/markpos.hpp>
 #include <novatel_oem6_msgs/msg/marktime.hpp>
+#include <novatel_oem6_msgs/msg/rangecmp.hpp>
 #include <novatel_oem6_msgs/msg/rawephem.hpp>
 #include <novatel_oem6_msgs/msg/rawimus.hpp>
 #include <novatel_oem6_msgs/msg/rxstatus.hpp>
@@ -76,6 +81,7 @@
 #include <tf2/LinearMath/Matrix3x3.hpp>
 #include <tf2/LinearMath/Quaternion.hpp>
 
+#include "NtripForwarder.h"
 #include "mrpt_sensorlib/mrpt_sensorlib.h"
 
 namespace
@@ -156,6 +162,12 @@ struct NovatelNodeState
   double external_imu_azimuth_deg_for_yaw_zero = 0.0;
   double manual_init_azimuth_deg = 0.0;
   double manual_init_azimuth_std_deg = 10.0;
+
+  // Use of the corrections by the receiver, from the latest BESTPOS:
+  double bestpos_stamp = 0;  // [s, wall clock] 0 if none yet
+  uint32_t position_type = 0;
+  float diff_age = 0;
+  std::string base_station_id;
 };
 
 // Convert quaternion to azimuth (heading) in degrees
@@ -283,8 +295,16 @@ struct NovatelPublishers
   rclcpp::Publisher<novatel_oem6_msgs::msg::MARK2TIME>::SharedPtr mark2time;
   rclcpp::Publisher<novatel_oem6_msgs::msg::IONUTC>::SharedPtr ionutc;
   rclcpp::Publisher<novatel_oem6_msgs::msg::RAWEPHEM>::SharedPtr rawephem;
+  rclcpp::Publisher<novatel_oem6_msgs::msg::RANGECMP>::SharedPtr rangecmp;
   rclcpp::Publisher<novatel_oem6_msgs::msg::RXSTATUS>::SharedPtr rxstatus;
 };
+
+// Fixed-size char fields (e.g. base station ID) are padded with NULs, which
+// are not valid inside a ROS string: keep only up to the first NUL.
+std::string fixedCharsToString(const char* s, size_t maxLen)
+{
+  return std::string(s, strnlen(s, maxLen));
+}
 
 template <typename T>
 void ensurePublisher(
@@ -316,7 +336,7 @@ novatel_oem6_msgs::msg::BESTPOS convertBESTPOS(
   out.lat_sigma = msg.fields.lat_sigma;
   out.lon_sigma = msg.fields.lon_sigma;
   out.hgt_sigma = msg.fields.hgt_sigma;
-  out.base_station_id = std::string(msg.fields.base_station_id, 4);
+  out.base_station_id = fixedCharsToString(msg.fields.base_station_id, 4);
   out.diff_age = msg.fields.diff_age;
   out.sol_age = msg.fields.sol_age;
   out.num_sats_tracked = msg.fields.num_sats_tracked;
@@ -407,7 +427,7 @@ novatel_oem6_msgs::msg::MARKPOS convertMARKPOS(
   out.lat_sigma = msg.fields.lat_sigma;
   out.lon_sigma = msg.fields.lon_sigma;
   out.hgt_sigma = msg.fields.hgt_sigma;
-  out.base_station_id = std::string(msg.fields.base_station_id, 4);
+  out.base_station_id = fixedCharsToString(msg.fields.base_station_id, 4);
   out.diff_age = msg.fields.diff_age;
   out.sol_age = msg.fields.sol_age;
   out.num_sats_tracked = msg.fields.num_sats_tracked;
@@ -501,6 +521,63 @@ novatel_oem6_msgs::msg::RAWEPHEM convertRAWEPHEM(
   return out;
 }
 
+// Reads n bytes (n <= 8) as a little-endian unsigned integer.
+uint64_t readLittleEndian(const uint8_t* p, size_t n)
+{
+  uint64_t v = 0;
+  for (size_t i = 0; i < n; i++)
+  {
+    v |= static_cast<uint64_t>(p[i]) << (8 * i);
+  }
+  return v;
+}
+
+// Sign-extends the lowest `bits` bits of `v`.
+int64_t signExtend(uint64_t v, unsigned int bits)
+{
+  const uint64_t m = uint64_t(1) << (bits - 1);
+  v &= (uint64_t(1) << bits) - 1;
+  return static_cast<int64_t>((v ^ m) - m);
+}
+
+novatel_oem6_msgs::msg::RANGECMP convertRANGECMP(
+    const mrpt::obs::gnss::Message_NV_OEM6_RANGECMP& msg, const std_msgs::msg::Header& header)
+{
+  // Pseudorange standard deviation [m] for each 4-bit code
+  constexpr float psrStdTable[16] = {0.050f, 0.075f, 0.113f, 0.169f, 0.253f, 0.380f,
+                                     0.570f, 0.854f, 1.281f, 2.375f, 4.750f, 9.500f,
+                                     19.0f,  38.0f,  76.0f,  152.0f};
+
+  novatel_oem6_msgs::msg::RANGECMP out;
+  out.header = header;
+  out.obs.reserve(msg.obs_data.size());
+
+  for (const auto& rec : msg.obs_data)
+  {
+    const uint8_t* d = rec.data;
+    const auto status = static_cast<uint32_t>(readLittleEndian(d, 4));
+    const uint64_t dopPsr = readLittleEndian(d + 4, 8);
+    const uint64_t lockCno = readLittleEndian(d + 18, 6);
+
+    novatel_oem6_msgs::msg::RangeObs o;
+    o.tracking_status = status;
+    o.phase_locked = (status & (1u << 10)) != 0;
+    o.code_locked = (status & (1u << 12)) != 0;
+    o.system = static_cast<uint8_t>((status >> 16) & 0x07);
+    o.signal_type = static_cast<uint8_t>((status >> 21) & 0x1F);
+    o.doppler = static_cast<double>(signExtend(dopPsr, 28)) / 256.0;
+    o.pseudorange = static_cast<double>(dopPsr >> 28) / 128.0;
+    o.pseudorange_std = psrStdTable[d[16] & 0x0F];
+    o.prn = d[17];
+    o.lock_time = static_cast<float>(lockCno & 0x1FFFFF) / 32.0f;
+    o.cno = 20.0f + static_cast<float>((lockCno >> 21) & 0x1F);
+    o.glonass_freq = static_cast<uint8_t>((lockCno >> 26) & 0x3F);
+    out.obs.push_back(o);
+  }
+
+  return out;
+}
+
 novatel_oem6_msgs::msg::RXSTATUS convertRXSTATUS(
     const mrpt::obs::gnss::Message_NV_OEM6_RXSTATUS& msg, const std_msgs::msg::Header& header)
 {
@@ -527,6 +604,68 @@ novatel_oem6_msgs::msg::RXSTATUS convertRXSTATUS(
   out.aux3stat_clear = msg.fields.aux3stat_clear;
 
   return out;
+}
+
+void ntripDiagnostics(
+    diagnostic_updater::DiagnosticStatusWrapper& stat, const mrpt_sensors::NtripForwarder& fwd,
+    NovatelNodeState& state)
+{
+  using diagnostic_msgs::msg::DiagnosticStatus;
+
+  const auto st = fwd.status();
+  const auto& p = fwd.parameters();
+  const double now = mrpt::Clock::nowDouble();
+  const bool gotData = st.connected && st.last_data_stamp >= st.connected_since;
+  const double lastData = gotData ? st.last_data_stamp : st.connected_since;
+
+  if (!st.connected)
+  {
+    if (st.caster_error.empty())
+    {
+      stat.summary(DiagnosticStatus::WARN, "Connecting to the NTRIP caster...");
+    }
+    else
+    {
+      stat.summaryf(
+          DiagnosticStatus::ERROR, "Not connected to the NTRIP caster: %s",
+          st.caster_error.c_str());
+    }
+  }
+  else if (!st.serial_open)
+  {
+    stat.summaryf(
+        DiagnosticStatus::ERROR, "Corrections not forwarded to the receiver: %s",
+        st.serial_error.c_str());
+  }
+  else if (now - lastData > 0.5 * p.stream_timeout)
+  {
+    stat.summaryf(DiagnosticStatus::WARN, "No corrections for %.1f s", now - lastData);
+  }
+  else
+  {
+    stat.summaryf(DiagnosticStatus::OK, "Receiving corrections (%.0f B/s)", st.data_rate);
+  }
+
+  stat.add("Caster", mrpt::format("%s:%i", p.caster.server.c_str(), p.caster.port));
+  stat.add("Mount point", p.caster.mountpoint);
+  stat.add("Serial port", p.serial_port);
+  stat.add("Connected", st.connected);
+  stat.add("Serial port open", st.serial_open);
+  stat.add("Seconds since last data", st.last_data_stamp > 0 ? now - st.last_data_stamp : -1.0);
+  stat.add("Data rate (B/s)", st.data_rate);
+  stat.add("Bytes received", st.bytes_received);
+  stat.add("Bytes forwarded", st.bytes_forwarded);
+  stat.add("GGA sent to caster", st.gga_sent);
+  stat.add("Connections", st.connections);
+  stat.add("Last caster error", st.caster_error);
+  stat.add("Last serial port error", st.serial_error);
+
+  std::lock_guard<std::mutex> lock(state.mutex);
+  stat.add(
+      "Seconds since last BESTPOS", state.bestpos_stamp > 0 ? now - state.bestpos_stamp : -1.0);
+  stat.add("Receiver position type", state.position_type);
+  stat.add("Receiver correction age (s)", state.diff_age);
+  stat.add("Receiver base station ID", state.base_station_id);
 }
 
 }  // anonymous namespace
@@ -638,47 +777,29 @@ setup_cmd15 = INSCOMMAND ENABLE
 
 # === OUTPUT LOG CONFIGURATION ===
 
+# Only logs with a dedicated MRPT parser: others (e.g. BESTVELB, INSATTB) go
+# through the generic frame container, whose decoding is currently broken.
+
 # 13. Position logs (high rate for navigation)
 setup_cmd16 = LOG USB1 BESTPOSB ONTIME 0.05
-setup_cmd17 = LOG USB1 BESTVELB ONTIME 0.1
 
 # 14. INS solution (position + velocity + attitude)
-setup_cmd18 = LOG USB1 INSPVASB ONTIME 0.05
-setup_cmd19 = LOG USB1 INSATTB ONTIME 0.1
+setup_cmd17 = LOG USB1 INSPVASB ONTIME 0.05
 
 # 15. Raw measurements for post-processing and RTK
-setup_cmd20 = LOG USB1 RANGECMPB ONTIME 1
-setup_cmd21 = LOG USB1 RAWEPHEMB ONCHANGED
-setup_cmd22 = LOG USB1 IONUTCB ONCHANGED
+setup_cmd18 = LOG USB1 RANGECMPB ONTIME 1
+setup_cmd19 = LOG USB1 RAWEPHEMB ONCHANGED
+setup_cmd20 = LOG USB1 IONUTCB ONCHANGED
 
 # 16. Diagnostics and status
-setup_cmd23 = LOG USB1 VERSION ONCE
-setup_cmd24 = LOG USB1 RXSTATUSB ONTIME 10
+setup_cmd21 = LOG USB1 VERSION ONCE
+setup_cmd22 = LOG USB1 RXSTATUSB ONTIME 10
 
 # 17. GGA for NTRIP feedback
-setup_cmd25 = LOG USB1 GPGGARTK ONTIME 1
+setup_cmd23 = LOG USB1 GPGGARTK ONTIME 1
 
 # Shutdown
 shutdown_cmd1 = UNLOGALL
-
-
-# =======================================================
-#  VIRTUAL SENSOR: NTRIP CLIENT
-# =======================================================
-[NTRIP]
-driver       = CNTRIPEmitter
-process_rate = ${PROCESS_RATE}
-
-# Serial port for NTRIP data output to Novatel
-COM_port_LIN = ${NOVATEL_NTRIP_INPUT_SERIAL_PORT}
-baudRate     = 9600
-
-# NTRIP caster configuration
-server     = ${NTRIP_SERVER}
-port       = ${NTRIP_PORT}
-mountpoint = ${NTRIP_MOUNT_POINT}
-user       = ${NTRIP_USER}
-password   = ${NTRIP_PASSWORD}
 
 )"""";
 
@@ -811,9 +932,8 @@ int main(int argc, char** argv)
         return;
       }
 
-      std_msgs::msg::Header msgHeader;
-      msgHeader.frame_id = node->sensor_frame_id();
-      msgHeader.stamp = mrpt::ros2bridge::toROS(obs->timestamp);
+      // create_header() falls back to the current time for invalid GNSS stamps:
+      const std_msgs::msg::Header msgHeader = node->create_header(*o);
 
       node->ensure_publisher_exists<sensor_msgs::msg::NavSatFix>(node->gps_publisher_);
 
@@ -909,6 +1029,19 @@ int main(int argc, char** argv)
         nvt_pubs.rawephem->publish(convertRAWEPHEM(msg, msgHeader));
       }
 
+      // RANGECMP has no static msg_type, so getMsgByClass() cannot be used:
+      if (o->hasMsgType(mrpt::obs::gnss::NV_OEM6_RANGECMP))
+      {
+        const auto* msg = dynamic_cast<const mrpt::obs::gnss::Message_NV_OEM6_RANGECMP*>(
+            o->getMsgByType(mrpt::obs::gnss::NV_OEM6_RANGECMP));
+        if (msg)
+        {
+          ensurePublisher<novatel_oem6_msgs::msg::RANGECMP>(
+              nvt_pubs.rangecmp, node.get(), "~/novatel/rangecmp");
+          nvt_pubs.rangecmp->publish(convertRANGECMP(*msg, msgHeader));
+        }
+      }
+
       if (o->hasMsgClass<mrpt::obs::gnss::Message_NV_OEM6_RXSTATUS>())
       {
         const auto& msg = o->getMsgByClass<mrpt::obs::gnss::Message_NV_OEM6_RXSTATUS>();
@@ -924,6 +1057,14 @@ int main(int argc, char** argv)
 
         static uint32_t last_sol_stat = 0xFFFFFFFF;
         static uint32_t last_pos_type = 0xFFFFFFFF;
+
+        {
+          std::lock_guard<std::mutex> lock(state.mutex);
+          state.bestpos_stamp = mrpt::Clock::nowDouble();
+          state.position_type = bestpos.fields.position_type;
+          state.diff_age = bestpos.fields.diff_age;
+          state.base_station_id = fixedCharsToString(bestpos.fields.base_station_id, 4);
+        }
 
         if (bestpos.fields.solution_stat != last_sol_stat ||
             bestpos.fields.position_type != last_pos_type)
@@ -952,10 +1093,9 @@ int main(int argc, char** argv)
         }
       }
 
-      auto header = node->create_header(*o);
       auto msg = sensor_msgs::msg::NavSatFix();
 
-      bool valid = mrpt::ros2bridge::toROS(*o, header, msg);
+      bool valid = mrpt::ros2bridge::toROS(*o, msgHeader, msg);
       if (valid)
       {
         if (enu_sigmas.has_value())
@@ -979,7 +1119,6 @@ int main(int argc, char** argv)
         {
             {"process_rate", "PROCESS_RATE", "100", false},
             {"novatel_main_serial_port", "NOVATEL_SERIAL_PORT", "", true},
-            {"novatel_ntrip_serial_port", "NOVATEL_NTRIP_INPUT_SERIAL_PORT", "", true},
             {"serial_baud_rate", "SERIAL_BAUD_RATE", "115200", false},
             {"raw_dump_file", "RAW_DUMP_FILE", "", false},
             {"novatel_imu_orientation", "SETIMUORIENTATION", "6", false},
@@ -990,14 +1129,8 @@ int main(int argc, char** argv)
             {"sensor_pose_x", "SENSOR_POSE_X", "0", false},
             {"sensor_pose_y", "SENSOR_POSE_Y", "0", false},
             {"sensor_pose_z", "SENSOR_POSE_Z", "0", false},
-
-            {"ntrip_server", "NTRIP_SERVER", "www.euref-ip.net", false},
-            {"ntrip_port", "NTRIP_PORT", "2101", false},
-            {"ntrip_mount_point", "NTRIP_MOUNT_POINT", "ALME00ESP0", false},
-            {"ntrip_user", "NTRIP_USER", "", false},
-            {"ntrip_password", "NTRIP_PASSWORD", "", false},
         },
-        {"GPS", "NTRIP"});
+        {"GPS"});
 
     // Get pointer to GPS interface for sending commands
     auto* gps = node->getSensor<mrpt::hwdrivers::CGPSInterface>(0);
@@ -1011,7 +1144,62 @@ int main(int argc, char** argv)
       RCLCPP_WARN(logger, "Could not get GPS interface - runtime commands disabled");
     }
 
+    // NTRIP corrections, forwarded in their own thread so neither a slow
+    // caster nor a lost link delays the GNSS data:
+    mrpt_sensors::NtripForwarder::Parameters ntrip_params;
+    ntrip_params.serial_port =
+        node->declare_parameter<std::string>("novatel_ntrip_serial_port", "");
+    ntrip_params.caster.server =
+        node->declare_parameter<std::string>("ntrip_server", "www.euref-ip.net");
+    ntrip_params.caster.port =
+        std::stoi(node->declare_parameter<std::string>("ntrip_port", "2101"));
+    ntrip_params.caster.mountpoint =
+        node->declare_parameter<std::string>("ntrip_mount_point", "ALME00ESP0");
+    ntrip_params.caster.user = node->declare_parameter<std::string>("ntrip_user", "");
+    ntrip_params.caster.password = node->declare_parameter<std::string>("ntrip_password", "");
+    // Accept both "10" and "10.0" for times in seconds:
+    const auto declare_seconds = [&node](const std::string& name, double defaultValue)
+    {
+      rcl_interfaces::msg::ParameterDescriptor desc;
+      desc.dynamic_typing = true;
+      const auto& v = node->declare_parameter(name, rclcpp::ParameterValue(defaultValue), desc);
+      if (v.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER)
+      {
+        return static_cast<double>(v.get<int64_t>());
+      }
+      return v.get<double>();
+    };
+    ntrip_params.stream_timeout = declare_seconds("ntrip_stream_timeout", 10.0);
+    ntrip_params.reconnect_delay = declare_seconds("ntrip_reconnect_delay", 5.0);
+    ntrip_params.send_gga = node->declare_parameter("ntrip_send_gga", true);
+
+    std::unique_ptr<mrpt_sensors::NtripForwarder> ntrip;
+    if (ntrip_params.serial_port.empty() || ntrip_params.caster.server.empty() ||
+        ntrip_params.caster.mountpoint.empty())
+    {
+      RCLCPP_WARN(
+          logger,
+          "NTRIP corrections disabled: 'novatel_ntrip_serial_port', 'ntrip_server' and "
+          "'ntrip_mount_point' are required.");
+    }
+    else
+    {
+      ntrip = std::make_unique<mrpt_sensors::NtripForwarder>(ntrip_params, logger);
+      node->diagnostics().add(
+          "NTRIP status",
+          [&ntrip, &state](diagnostic_updater::DiagnosticStatusWrapper& stat)
+          {
+            if (ntrip)
+            {
+              ntripDiagnostics(stat, *ntrip, state);
+            }
+          });
+      ntrip->start();
+    }
+
     node->run();
+
+    ntrip.reset();
 
     rclcpp::shutdown();
     return 0;

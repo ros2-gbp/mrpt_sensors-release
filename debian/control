@@ -1,0 +1,12 @@
+Source: ros-humble-novatel-oem6-msgs
+Section: misc
+Priority: optional
+Maintainer: "Jose-Luis Blanco-Claraco" <jlblanco@ual.es>
+Build-Depends: debhelper (>= 9.0.0), ros-humble-ament-cmake, ros-humble-ament-cmake-xmllint <!nocheck>, ros-humble-ros-environment, ros-humble-rosidl-default-generators, ros-humble-std-msgs, ros-humble-ros-workspace, ros-humble-rosidl-typesupport-fastrtps-c, ros-humble-rosidl-typesupport-fastrtps-cpp
+Homepage: https://index.ros.org/p/novatel_oem6_msgs/#humble
+Standards-Version: 3.9.2
+
+Package: ros-humble-novatel-oem6-msgs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-humble-rosidl-default-runtime, ros-humble-std-msgs, ros-humble-ros-workspace
+Description: ROS messages and services for Novatel OEM6

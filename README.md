@@ -20,6 +20,9 @@ ROS nodes for various robotics sensors via mrpt-hwdrivers.
 
 All packages follow [REP-2003](https://ros.org/reps/rep-2003.html) regarding ROS 2 topic QoS.
 
+The pose of each sensor (`robot_frame_id` to `sensor_frame_id`) is published to `/tf_static`.
+Launches that namespace the TF tree must remap `/tf_static` too, not only `/tf`.
+
 <!-- md_toc github  < README.md -->
 
 # Table of Contents
@@ -120,6 +123,8 @@ ros2 run rqt_robot_monitor rqt_robot_monitor
 ROS 2 node for Bumblebee Stereo Cameras using libdc1394 interface.
 
 Supported models: Bumblebee2 stereo cameras with FireWire connection.
+The user running it needs read/write access to the camera `/dev/fw*` device
+(group `video` by default).
 
 ```bash
 # INSTALL:
@@ -131,6 +136,19 @@ sudo apt install ros-${ROS_DISTRO}-mrpt-sensor-bumblebee-stereo
 ros2 launch mrpt_sensor_bumblebee_stereo mrpt_sensor_bumblebee_stereo.launch.py
 ```
 
+Topics, in the launch `namespace` (default: `bumblebee_stereo`):
+
+* `left/image_raw`, `right/image_raw`: every frame (only built while subscribed).
+* `low_rate/left/image_raw`, `low_rate/right/image_raw`: one pair every
+  `1/low_rate_hz` seconds (default: 1 Hz), e.g. for previews or long recordings.
+
+By default, images are the raw Bayer mosaics sent by the camera
+(`bayer_gbrg8`): lossless and 3 times smaller than RGB, to be demosaiced
+offline (e.g. `image_proc`). Both images of a pair have the same stamp: the
+time the frame was captured. TF: `<robot_frame_id>` -> `<sensor_frame_id>`
+(camera body, at the left camera) -> `<sensor_frame_id>_left` and `_right`
+(optical frames, nominal baseline).
+
 <details>
   <summary>Launch arguments</summary>
 
@@ -139,7 +157,7 @@ ros2 launch mrpt_sensor_bumblebee_stereo mrpt_sensor_bumblebee_stereo.launch.py 
 Arguments (pass arguments as '<name>:=<value>'):
 
     'process_rate':
-        Rate (Hz) for the process() main sensor loop.
+        Rate (Hz) of the main sensor loop: above the camera rate.
         (default: '"80"')
 
     'out_rawlog_prefix':
@@ -150,44 +168,60 @@ Arguments (pass arguments as '<name>:=<value>'):
         If not empty, mrpt_msgs/GenericObservation messages will be published to this topic name with the binary serialization of mrtp::obs::CObservation objects from the sensor.
         (default: '')
 
-    'publish_topic':
-        If not empty, messages of type sensor_msg/Image will be published to this topic (plus suffix "_left"/"_right") for each sensor observation.
-        (default: 'sensor')
-
     'sensor_frame_id':
-        The sensor frame_id name. Used to populate msg header and to publish to /tf too.
-        (default: 'sensor')
+        Camera body frame (x forward, at the left camera). Images are in the optical frames <sensor_frame_id>_left and _right.
+        (default: 'camera')
 
     'robot_frame_id':
-        The robot frame_id name. Used to publish the sensor pose to /tf.
+        The robot frame_id name. Used to publish the sensor pose to /tf_static.
         (default: 'base_link')
-
-    'dc1394_framerate':
-        eg: 7.5, 15, 30, 60, etc... For possibilities see mrpt::hwdrivers::TCaptureOptions_dc1394
-        (default: '"15"')
-
-    'dc1394_camera_guid':
-        0 (or not present): the first camera. A hexadecimal number (0x11223344): The GUID of the camera to open
-        (default: '"0"')
-
-    'camera_preview_decimation':
-        N<=0 (or not present): No preview; N>0, display 1 out of N captured frames.
-        (default: '"0"')
 
     'sensor_label':
         The sensorLabel field of mrpt::obs::CObservation: a "name" for the sensor.
-        (default: 'sensor')
+        (default: 'stereo')
+
+    'dc1394_framerate':
+        Camera frame rate (Hz): 1.875, 3.75, 7.5, 15, 30 or 60.
+        (default: '"15"')
+
+    'dc1394_camera_guid':
+        0: the first camera. A hexadecimal number (0x11223344): the GUID of the camera to open.
+        (default: '"0"')
+
+    'bayer_decoding':
+        false: publish the raw Bayer images (lossless, 1 byte/pixel); true: RGB images.
+        (default: '"false"')
+
+    'bayer_pattern':
+        Color filter of the raw images (rggb, bggr, gbrg or grbg). Bumblebee2: gbrg.
+        (default: 'gbrg')
+
+    'low_rate_hz':
+        Rate (Hz) of the low_rate/ images; 0 to disable them.
+        (default: '1.0')
+
+    'publish_full_rate':
+        Whether to advertise the full rate images.
+        (default: 'true')
+
+    'stereo_baseline':
+        Distance between the cameras (m), for the right optical frame.
+        (default: '0.12')
+
+    'camera_preview_decimation':
+        N<=0: No preview; N>0, display 1 out of N captured frames (needs a display).
+        (default: '"0"')
 
     'sensor_pose_x':
-        Sensor pose coordinate on the vehicle frame.
+        Sensor pose coordinate on the vehicle frame (meters).
         (default: '"0.0"')
 
     'sensor_pose_y':
-        Sensor pose coordinate on the vehicle frame.
+        Sensor pose coordinate on the vehicle frame (meters).
         (default: '"0.0"')
 
     'sensor_pose_z':
-        Sensor pose coordinate on the vehicle frame.
+        Sensor pose coordinate on the vehicle frame (meters).
         (default: '"0.0"')
 
     'sensor_pose_yaw':
@@ -202,10 +236,19 @@ Arguments (pass arguments as '<name>:=<value>'):
         Sensor pose coordinate on the vehicle frame (degrees).
         (default: '"0.0"')
 
+    'namespace':
+        Namespace of the node and its topics.
+        (default: 'bumblebee_stereo')
+
+    'node_name':
+        Node name.
+        (default: 'mrpt_sensor_bumblebee_stereo')
+
     'log_level':
         Logging level
         (default: 'INFO')
 ```
+
 </details>
 
 
@@ -259,7 +302,7 @@ Arguments (pass arguments as '<name>:=<value>'):
         (default: 'sensor')
 
     'sensor_frame_id':
-        The sensor frame_id name. Used to populate msg header and to publish to /tf too.
+        The sensor frame_id name. Used to populate msg header and to publish to /tf_static too.
         (default: 'sensor')
 
     'sensor_label':
@@ -318,6 +361,14 @@ e.g. after a WiFi or NAT change). Besides the common `Sensor status`, the node p
 `WARN` if no corrections arrive), with the data rate, connection count, last error and the
 correction age and base station ID reported by the receiver in BESTPOS.
 
+Startup aiding, for a faster first fix after a cold start: with
+`approx_time_from_system_clock:=true` the node sends `SETAPPROXTIME` from the system clock
+while the receiver does not know the time, and with `approx_position:="lat lon height"`,
+`SETAPPROXPOS` while it has no position, once each. With SPAN, the INS also takes that
+position as its initial one and propagates it (`PROPAGATED`) with no GNSS at all, so
+positions published before the first GNSS solution since startup are marked `NO_FIX`
+(`ins_positions_before_gnss_fix:=true` publishes them as before).
+
 Supported models: Novatel OEM6
 
 ```bash
@@ -367,11 +418,11 @@ Arguments (pass arguments as '<name>:=<value>'):
         (default: 'sensor')
 
     'sensor_frame_id':
-        The sensor frame_id name. Used to populate msg header and to publish to /tf too.
+        The sensor frame_id name. Used to populate msg header and to publish to /tf_static too.
         (default: 'sensor')
 
     'robot_frame_id':
-        The robot frame_id name. Used to publish the sensor pose to /tf.
+        The robot frame_id name. Used to publish the sensor pose to /tf_static.
         (default: 'base_link')
 
     'sensor_label':
@@ -409,6 +460,18 @@ Arguments (pass arguments as '<name>:=<value>'):
     'novatel_init_azimuth':
         See Novatel docs for SETINITAZIMUTH.
         (default: '"0.000000 25.000000"')
+
+    'approx_time_from_system_clock':
+        If true, send SETAPPROXTIME from the system clock while the receiver does not know the time (faster first fix).
+        (default: 'false')
+
+    'approx_position':
+        If not empty, "lat_deg lon_deg height_m" sent as SETAPPROXPOS while the receiver has no position (faster first fix). With SPAN, the INS also takes it as its initial position.
+        (default: '')
+
+    'ins_positions_before_gnss_fix':
+        If false, positions published before the first GNSS solution since startup (e.g. the INS propagating an approximate position) are marked NO_FIX.
+        (default: 'false')
 
     'ntrip_server':
         DNS or IP of the NTRIP server.
@@ -545,6 +608,9 @@ ros2 service call /gnss/mrpt_sensor_gnss_novatel/send_novatel_command \
 
 Supported models: `hfi-b6`, `hfi-a9`
 
+Publishes `<publish_topic>` (`sensor_msgs/Imu`) and, for models with a magnetometer (`hfi-a9`),
+the raw magnetic field in the sensor axes on `<publish_topic>/mag` (`sensor_msgs/MagneticField`).
+
 ```bash
 # INSTALL:
 sudo apt install ros-${ROS_DISTRO}-mrpt-sensor-imu-taobotics
@@ -579,11 +645,11 @@ Arguments (pass arguments as '<name>:=<value>'):
         (default: 'sensor')
 
     'sensor_frame_id':
-        The sensor frame_id name. Used to populate msg header and to publish to /tf too.
+        The sensor frame_id name. Used to populate msg header and to publish to /tf_static too.
         (default: 'imu')
 
     'robot_frame_id':
-        The robot frame_id name. Used to publish the sensor pose to /tf.
+        The robot frame_id name. Used to publish the sensor pose to /tf_static.
         (default: 'base_link')
 
     'serial_port':

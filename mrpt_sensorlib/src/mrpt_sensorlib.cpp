@@ -93,6 +93,7 @@ std::string short_error_message(const std::string& what)
 GenericSensorNode::GenericSensorNode(const std::string& nodeName) : Node(nodeName)
 {
   tf_bc_ = std::make_shared<tf2_ros::TransformBroadcaster>(*this);
+  tf_static_bc_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(*this);
   stamp_node_start_ = mrpt::Clock::nowDouble();
 }
 
@@ -191,11 +192,6 @@ void GenericSensorNode::init(
 
     this->declare_parameter("publish_sensor_pose_tf", publish_sensor_pose_tf_);
     publish_sensor_pose_tf_ = this->get_parameter("publish_sensor_pose_tf").as_bool();
-
-    this->declare_parameter(
-        "publish_sensor_pose_tf_minimum_period", publish_sensor_pose_tf_minimum_period_);
-    publish_sensor_pose_tf_minimum_period_ =
-        this->get_parameter("publish_sensor_pose_tf_minimum_period").as_double();
 
     this->declare_parameter("diag_startup_timeout", diag_startup_timeout_);
     diag_startup_timeout_ = this->get_parameter("diag_startup_timeout").as_double();
@@ -427,9 +423,9 @@ void GenericSensorNode::process_observation(const mrpt::obs::CObservation::Ptr& 
     obs_publisher_->publish(msg);
   }
 
-  // Publish tf?
+  // The sensor pose is fixed: published as a static transform, again only if it changes
   if (publish_sensor_pose_tf_ && robot_frame_id_ != sensor_frame_id_ &&
-      tNow - stamp_last_tf_publish_ >= publish_sensor_pose_tf_minimum_period_)
+      (!last_published_sensor_pose_ || *last_published_sensor_pose_ != o->sensorPose()))
   {
     ASSERT_(!robot_frame_id_.empty());
     ASSERT_(!sensor_frame_id_.empty());
@@ -443,9 +439,9 @@ void GenericSensorNode::process_observation(const mrpt::obs::CObservation::Ptr& 
     tf.transform = tf2::toMsg(mrpt::ros2bridge::toROS_tfTransform(o->sensorPose()));
 
     // Publish the transform
-    tf_bc_->sendTransform(tf);
+    tf_static_bc_->sendTransform(tf);
 
-    stamp_last_tf_publish_ = tNow;
+    last_published_sensor_pose_ = o->sensorPose();
   }
 
   // Save to .rawlog?
@@ -520,6 +516,22 @@ void GenericSensorNode::process(const mrpt::obs::CObservationIMU& o)
   if (!valid) return;
 
   imu_publisher_->publish(msg);
+
+  if (!o.has(mrpt::obs::IMU_MAG_X) || !o.has(mrpt::obs::IMU_MAG_Y) || !o.has(mrpt::obs::IMU_MAG_Z))
+  {
+    return;
+  }
+  ensure_publisher_exists<sensor_msgs::msg::MagneticField>(mag_publisher_, "/mag");
+
+  // MRPT keeps the field in gauss, in the sensor axes; ROS expects tesla.
+  // The covariance stays zero: unknown.
+  constexpr double GAUSS_TO_TESLA = 1e-4;
+  auto magMsg = sensor_msgs::msg::MagneticField();
+  magMsg.header = header;
+  magMsg.magnetic_field.x = o.get(mrpt::obs::IMU_MAG_X) * GAUSS_TO_TESLA;
+  magMsg.magnetic_field.y = o.get(mrpt::obs::IMU_MAG_Y) * GAUSS_TO_TESLA;
+  magMsg.magnetic_field.z = o.get(mrpt::obs::IMU_MAG_Z) * GAUSS_TO_TESLA;
+  mag_publisher_->publish(magMsg);
 }
 
 void GenericSensorNode::diag_callback(diagnostic_updater::DiagnosticStatusWrapper& stat)

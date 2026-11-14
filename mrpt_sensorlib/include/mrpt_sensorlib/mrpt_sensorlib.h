@@ -41,13 +41,16 @@
 #include <mrpt/config/CConfigFileBase.h>
 #include <mrpt/hwdrivers/CGenericSensor.h>
 #include <mrpt/io/CFileGZOutputStream.h>
+#include <mrpt/math/TPose3D.h>
 #include <mrpt/obs/obs_frwds.h>
+#include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
 
 //
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -58,6 +61,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <sensor_msgs/msg/magnetic_field.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 
 namespace mrpt_sensors
@@ -115,16 +119,20 @@ class GenericSensorNode : public rclcpp::Node
       pub =
           this->create_publisher<MSG_T>(publish_topic_ + topicSuffix, rclcpp::SystemDefaultsQoS());
 
-      RCLCPP_INFO_STREAM(this->get_logger(), "Created publisher for topic: " << publish_topic_);
+      RCLCPP_INFO_STREAM(
+          this->get_logger(), "Created publisher for topic: " << publish_topic_ + topicSuffix);
     }
   }
 
   std_msgs::msg::Header create_header(const mrpt::obs::CObservation& o);
 
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher_;
+  /// IMUs with a magnetometer: `<publish_topic>/mag`
+  rclcpp::Publisher<sensor_msgs::msg::MagneticField>::SharedPtr mag_publisher_;
   rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr gps_publisher_;
   std::map<std::string, rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr> images_publisher_;
-  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_bc_;
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_bc_;  //!< For sensor-specific transforms
+  std::shared_ptr<tf2_ros::StaticTransformBroadcaster> tf_static_bc_;  //!< The sensor pose
 
   const auto sensor_frame_id() const { return sensor_frame_id_; }
   const auto publish_topic() const { return publish_topic_; }
@@ -158,7 +166,6 @@ class GenericSensorNode : public rclcpp::Node
   std::string sensor_frame_id_ = "sensor";
   std::string robot_frame_id_ = "base_link";
   bool publish_sensor_pose_tf_ = true;
-  double publish_sensor_pose_tf_minimum_period_ = 0.1;  // [s]
 
   std::string publish_mrpt_obs_topic_ = "sensor_mrpt";
   std::string publish_topic_ = "sensor";
@@ -177,7 +184,8 @@ class GenericSensorNode : public rclcpp::Node
   };
   std::vector<SensorRunState> sensors_state_;
 
-  double stamp_last_tf_publish_ = 0;
+  /// Sensor pose last sent to /tf_static: it is sent again only if it changes
+  std::optional<mrpt::math::TPose3D> last_published_sensor_pose_;
 
   rclcpp::Publisher<mrpt_msgs::msg::GenericObservation>::SharedPtr obs_publisher_;
 

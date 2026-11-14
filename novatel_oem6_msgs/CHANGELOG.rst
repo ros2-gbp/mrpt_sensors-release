@@ -2,6 +2,9 @@
 Changelog for package novatel_oem6_msgs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.5.0 (2026-11-14)
+------------------
+
 0.4.1 (2026-10-27)
 ------------------
 * Merge pull request `#22 <https://github.com/mrpt-ros-pkg/mrpt_sensors/issues/22>`_ from mrpt-ros-pkg/feat/novatel-rangecmp

@@ -43,13 +43,13 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'sensor_frame_id',
             default_value='imu',
-            description='The sensor frame_id name. Used to populate msg header and to publish to /tf too.'
+            description='The sensor frame_id name. Used to populate msg header and to publish to /tf_static too.'
         ),
 
         DeclareLaunchArgument(
             'robot_frame_id',
             default_value='base_link',
-            description='The robot frame_id name. Used to publish the sensor pose to /tf.'
+            description='The robot frame_id name. Used to publish the sensor pose to /tf_static.'
         ),
         DeclareLaunchArgument(
             'sensor_label',
@@ -102,6 +102,12 @@ def generate_launch_description():
         ),
 
         DeclareLaunchArgument(
+            'node_name',
+            default_value='mrpt_sensor_imu_taobotics',
+            description='ROS node name (e.g. to run several IMUs at once)'
+        ),
+
+        DeclareLaunchArgument(
             "log_level",
             default_value=TextSubstitution(text=str("INFO")),
             description="Logging level"
@@ -111,7 +117,7 @@ def generate_launch_description():
         Node(
             package='mrpt_sensor_imu_taobotics',
             executable='mrpt_sensor_imu_taobotics_node',
-            name='mrpt_sensor_imu_taobotics',
+            name=LaunchConfiguration('node_name'),
             output='screen',
             arguments=['--ros-args', '--log-level',
                        LaunchConfiguration('log_level')],
